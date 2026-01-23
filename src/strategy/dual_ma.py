@@ -170,7 +170,7 @@ class DualMaStrategy(BaseStrategy):
         
         if qty_to_buy > 0:
             # 导入Order相关类
-            from ..models.order import Order, OrderType, OrderSide
+            from models.order import Order, OrderType, OrderSide
             
             order = Order(
                 symbol=symbol,
@@ -192,7 +192,7 @@ class DualMaStrategy(BaseStrategy):
         
         if qty_to_sell > 0:
             # 导入Order相关类
-            from ..models.order import Order, OrderType, OrderSide
+            from models.order import Order, OrderType, OrderSide
             
             order = Order(
                 symbol=symbol,

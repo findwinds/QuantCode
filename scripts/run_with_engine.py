@@ -172,42 +172,41 @@ def add_strategy_to_engine(engine, args):
     print("-" * 40)
     
     try:
-        # 选择策略类
+        # 如果指定期货策略，确保position是整数手数
         if args.strategy == 'futures_dual_ma':
-            try:
-                from strategy.futures_dual_ma import FuturesDualMaStrategy
-                strategy_cls = FuturesDualMaStrategy
-                print("策略: FuturesDualMaStrategy (期货)")
-                
-                # 期货策略参数
-                strategy_params = {
-                    'fast': args.fast,
-                    'slow': args.slow,
-                    'position': max(1, int(args.position)),  # 确保整数手数
-                }
-            except ImportError:
-                print("警告: FuturesDualMaStrategy未找到，使用DualMaStrategy")
-                from strategy.dual_ma import DualMaStrategy
-                strategy_cls = DualMaStrategy
-                strategy_params = {
-                    'fast': args.fast,
-                    'slow': args.slow,
-                    'position_ratio': args.position,
-                }
-        else:
+            # 将position转换为整数手数
+            position_value = max(1, int(args.position))  # 至少1手，取整数
+            print(f"期货策略: 每次交易 {position_value} 手")
+            
+            # 使用DualMaStrategy，但调整参数
             from strategy.dual_ma import DualMaStrategy
             strategy_cls = DualMaStrategy
-            print("策略: DualMaStrategy (默认)")
+            
+            # 对于期货，position_ratio应该大于1表示手数
             strategy_params = {
                 'fast': args.fast,
                 'slow': args.slow,
-                'position_ratio': args.position,
+                'position_ratio': float(position_value),  # 作为手数
+                'is_futures': True,  # 添加标记
+            }
+        else:
+            # 股票策略
+            from strategy.dual_ma import DualMaStrategy
+            strategy_cls = DualMaStrategy
+            strategy_params = {
+                'fast': args.fast,
+                'slow': args.slow,
+                'position_ratio': args.position,  # 仓位比例
+                'is_futures': False,
             }
         
         # 添加策略到引擎
         engine.add_strategy('main_strategy', strategy_cls, strategy_params)
-        print(f"参数: 快线={args.fast}, 慢线={args.slow}, " + 
-              f"{'手数' if args.strategy == 'futures_dual_ma' else '仓位'}={args.position}")
+        
+        if args.strategy == 'futures_dual_ma':
+            print(f"参数: 快线={args.fast}, 慢线={args.slow}, 手数={position_value}")
+        else:
+            print(f"参数: 快线={args.fast}, 慢线={args.slow}, 仓位={args.position:.1%}")
         
         return True
         
@@ -261,7 +260,7 @@ def print_results(results, args):
     print("回测结果")
     print("=" * 60)
     
-    # 性能指标
+    # 性能指标 - 只打印一次
     if 'performance' in results:
         perf = results['performance']
         print(f"📊 性能指标:")
@@ -272,30 +271,39 @@ def print_results(results, args):
         print(f"   胜率:       {perf.get('win_rate', 0):>12.2%}")
         print(f"   总手续费:   ¥{perf.get('total_commission', 0):>12,.2f}")
     
-    # 最终账户
+    # 最终账户 - 只打印一次
     if 'final_account' in results:
         account = results['final_account']
         print(f"\n💼 最终账户:")
         print(f"   总资产:     ¥{getattr(account, 'total_assets', args.capital):>12,.2f}")
         print(f"   可用资金:   ¥{getattr(account, 'available_cash', args.capital):>12,.2f}")
-        print(f"   已实现盈亏: ¥{getattr(account, 'realized_pnl', 0):>12,.2f}")
         
-        # 持仓
+        # 只打印一次盈亏
+        if hasattr(account, 'realized_pnl'):
+            print(f"   已实现盈亏: ¥{getattr(account, 'realized_pnl', 0):>12,.2f}")
+        
+        # 持仓信息
         positions = getattr(account, 'positions', {})
         if positions:
             print(f"\n📦 持仓:")
             for symbol, pos in positions.items():
                 qty = getattr(pos, 'quantity', 0)
+                if isinstance(pos, dict):
+                    qty = pos.get('quantity', 0)
+                
                 if qty != 0:
                     value = getattr(pos, 'market_value', 0)
+                    if isinstance(pos, dict):
+                        value = pos.get('market_value', 0)
                     print(f"   {symbol}: {qty:>8.2f} 股/手, 市值: ¥{value:>10,.2f}")
     
-    # 交易记录
+    # 交易记录 - 只打印一次
     if 'trades' in results:
         trades = results['trades']
-        print(f"\n💹 交易记录: {len(trades)} 笔")
-        if trades and len(trades) <= 10:  # 显示前10笔
-            for i, trade in enumerate(trades[:10], 1):
+        if trades:
+            print(f"\n💹 交易记录: {len(trades)} 笔")
+            # 显示所有交易
+            for i, trade in enumerate(trades, 1):
                 side = getattr(trade, 'side', 'N/A')
                 if hasattr(side, 'value'):
                     side = side.value
@@ -397,9 +405,11 @@ def main():
                 save_results(results, args.output)
             else:
                 try:
-                    save = input("\n是否保存结果到当前目录？(y/n): ").strip().lower()
+                    save = input("\n是否保存结果到data/results文件夹？(y/n): ").strip().lower()
                     if save == 'y':
-                        save_results(results, '.')
+                        results_dir = os.path.join('data', 'results')
+                        os.makedirs(results_dir, exist_ok=True)
+                        save_results(results, results_dir)
                 except:
                     pass
             

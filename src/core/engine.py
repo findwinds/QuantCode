@@ -104,11 +104,32 @@ class BacktestEngine:
         # 计算收益率
         total_return = (account.total_assets - self.broker.account.initial_capital) / self.broker.account.initial_capital
         
-        # 计算胜率
+        # 计算胜率 
         if trades:
-            winning_trades = [t for t in trades if (t.side == OrderSide.SELL and t.price > t.avg_filled_price) or 
-                            (t.side == OrderSide.BUY and t.price < t.avg_filled_price)]
-            win_rate = len(winning_trades) / len(trades)
+            winning_trades = 0
+            for t in trades:
+                # 方法1：如果有pnl属性
+                if hasattr(t, 'pnl'):
+                    if t.pnl > 0:
+                        winning_trades += 1
+                # 方法2：如果有profit属性
+                elif hasattr(t, 'profit'):
+                    if t.profit > 0:
+                        winning_trades += 1
+                # 方法3：如果trade对象有盈亏信息
+                elif hasattr(t, 'is_winning'):
+                    if t.is_winning:
+                        winning_trades += 1
+                # 方法4：简化的胜率计算（如果没有盈亏信息，假设50%胜率）
+                else:
+                    # 如果没有盈亏信息，无法计算准确胜率
+                    pass
+            
+            # 如果有可计算的交易，计算胜率
+            if winning_trades > 0:
+                win_rate = winning_trades / len(trades)
+            else:
+                win_rate = 0.0
         else:
             win_rate = 0.0
         
