@@ -6,19 +6,25 @@ from datetime import datetime
 
 @dataclass
 class Position:
-    """持仓信息"""
-    symbol: str
-    quantity: float = 0.0
-    avg_price: float = 0.0
-    market_value: float = 0.0
-    unrealized_pnl: float = 0.0
-    realized_pnl: float = 0.0
+    def __init__(self, symbol: str, trading_unit: int = 1):  # 添加交易单位参数
+        self.symbol = symbol
+        self.quantity = 0.0
+        self.avg_price = 0.0
+        self.trading_unit = trading_unit  # 新增
+        self.market_value = 0.0 # 持仓的绝对价值（总是正数）
+        self.unrealized_pnl = 0.0   # 未实现盈亏（可正可负）
+        self.realized_pnl = 0.0
     
     def update(self, current_price: float):
-        """更新持仓市值和未实现盈亏"""
-        self.market_value = self.quantity * current_price
+        """更新持仓信息"""
+        # 持仓市值：持仓的绝对价值
+        self.market_value = abs(self.quantity) * self.trading_unit * current_price
+        
+        # 未实现盈亏
         if self.quantity != 0:
-            self.unrealized_pnl = (current_price - self.avg_price) * self.quantity
+            current_value = self.quantity * self.trading_unit * current_price
+            cost = self.quantity * self.trading_unit * self.avg_price
+            self.unrealized_pnl = current_value - cost
         else:
             self.unrealized_pnl = 0.0
 
@@ -72,35 +78,28 @@ class Account:
         market_value = 0.0
         unrealized_pnl = 0.0
         
-        # 更新持仓市值
-        positions_info = {}
+        # 更新所有持仓
         for symbol, pos in self.positions.items():
             if symbol in current_prices:
                 price = current_prices[symbol]
                 pos.update(price)
                 market_value += pos.market_value
                 unrealized_pnl += pos.unrealized_pnl
-                positions_info[symbol] = Position(
-                    symbol=pos.symbol,
-                    quantity=pos.quantity,
-                    avg_price=pos.avg_price,
-                    market_value=pos.market_value,
-                    unrealized_pnl=pos.unrealized_pnl,
-                    realized_pnl=pos.realized_pnl
-                )
         
-        total_assets = self.available_cash + self.locked_cash + market_value
+        # 期货总资产计算
+        # total_assets = 可用资金 + 锁定资金 + 未实现盈亏
+        total_assets = self.available_cash + self.locked_cash + unrealized_pnl
         total_pnl = self.realized_pnl + unrealized_pnl
-        
+
         return AccountInfo(
             total_assets=total_assets,
             available_cash=self.available_cash,
             locked_cash=self.locked_cash,
-            market_value=market_value,
+            market_value=market_value,  # 持仓总规模（总是正数）
             total_pnl=total_pnl,
-            unrealized_pnl=unrealized_pnl,
+            unrealized_pnl=unrealized_pnl,  # 浮动盈亏
             realized_pnl=self.realized_pnl,
-            positions=positions_info
+            positions=self.positions  # 直接引用，避免复制
         )
     
     def lock_cash(self, amount: float) -> bool:

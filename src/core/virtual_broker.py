@@ -1,5 +1,7 @@
 # virtual_broker.py
-from typing import Dict, List, Callable
+import os
+import sys
+from typing import Dict, List, Callable, Optional
 from datetime import datetime
 import pandas as pd
 from .broker import BaseBroker
@@ -7,6 +9,9 @@ from models.order import Order, OrderType, OrderSide, OrderStatus, Trade
 from account.account import Account, AccountInfo, Position
 from core.event import Event, EventType
 
+# 添加项目根目录到 Python 路径
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, project_root)
 
 class ExecutionRule:
     """执行规则抽象类"""
@@ -54,13 +59,33 @@ class TPlusOneRule(ExecutionRule):
 class VirtualBroker(BaseBroker):
     """虚拟经纪商"""
     
-    def __init__(self, initial_capital: float = 100000.0):
+    def __init__(
+        self, 
+        initial_capital: float = 1000000.0,
+        config_path: Optional[str] = None
+    ):
         self.account = Account(initial_capital)
         self.orders: Dict[str, Order] = {}
         self.trades: List[Trade] = []
         self.current_prices: Dict[str, float] = {}
         self.rules: List[ExecutionRule] = []
         self.event_handlers: Dict[EventType, List[Callable]] = {}
+
+        if config_path is None:
+            config_path = "config/futures_config.yaml"
+
+        try:
+            from config.futures_config import FuturesConfig
+            print(f"正在加载期货配置: {config_path}")
+            self.futures_config = FuturesConfig(config_path)
+            print(f"期货配置加载成功")
+        except ImportError as e:
+            print(f"无法导入期货配置模块: {e}")
+            self.futures_config = None
+        except Exception as e:
+            print(f"加载期货配置文件失败: {e}")
+            self.futures_config = None
+        
         self.daily_reset()
     
     def add_rule(self, rule: ExecutionRule):
@@ -94,22 +119,71 @@ class VirtualBroker(BaseBroker):
         self._match_orders(symbol, data)
     
     def place_order(self, order: Order) -> str:
-        """下单"""
+        """下单（严格资金检查）"""
+        current_price = self.current_prices.get(order.symbol, order.price or 0)
+        
         # 检查规则
-        current_price = self.current_prices.get(order.symbol, 0)
         for rule in self.rules:
             if not rule.check(self, order, current_price):
                 order.status = OrderStatus.REJECTED
                 return order.order_id
         
-        # 检查资金
-        if order.side == OrderSide.BUY:
-            required_cash = order.quantity * (order.price or current_price)
-            if not self.account.lock_cash(required_cash):
-                order.status = OrderStatus.REJECTED
-                return order.order_id
+        # 获取当前持仓
+        position = self.account.positions.get(order.symbol)
+        current_qty = position.quantity if position else 0
         
-        # 接受订单
+        # 计算开仓数量（需要保证金的）
+        if order.side == OrderSide.BUY:
+            # 买入操作
+            if current_qty < 0:  # 当前有空头
+                close_qty = min(order.quantity, abs(current_qty))  # 平空仓数量
+                open_qty = max(0, order.quantity - close_qty)  # 剩余开多仓
+            else:  # 当前没有空头或有多头
+                close_qty = 0
+                open_qty = order.quantity  # 全部开多仓（加仓）
+        else:  # SELL
+            # 卖出操作  
+            if current_qty > 0:  # 当前有多头
+                close_qty = min(order.quantity, current_qty)  # 平多仓数量
+                open_qty = max(0, order.quantity - close_qty)  # 剩余开空仓
+            else:  # 当前没有多头或有空头
+                close_qty = 0
+                open_qty = order.quantity  # 全部开空仓（加仓）
+        
+
+        # 资金检查：开仓部分需要保证金
+        if open_qty > 0:
+            try:
+                if self.futures_config:
+                    margin_required = self.futures_config.calculate_margin(
+                        order.symbol, current_price, open_qty
+                    )
+                else:
+                    margin_required = open_qty * (order.price or current_price)
+                
+                # 严格检查：当前可用资金必须足够
+                if margin_required > self.account.available_cash:
+                    order.status = OrderStatus.REJECTED
+                    order.reject_reason = f"开仓保证金不足: 需要{margin_required:.2f}元，可用{self.account.available_cash:.2f}元"
+                    return order.order_id
+                
+                # 锁定保证金
+                if not self.account.lock_cash(margin_required):
+                    order.status = OrderStatus.REJECTED
+                    order.reject_reason = "锁定保证金失败"
+                    return order.order_id
+                
+                order.required_margin = margin_required
+                
+            except Exception as e:
+                order.status = OrderStatus.REJECTED
+                order.reject_reason = f"计算保证金失败: {str(e)}"
+                return order.order_id
+        else:
+            # 全部是平仓，不需要保证金
+            order.required_margin = 0
+        
+        # 接受订单...
         order.status = OrderStatus.SUBMITTED
         self.orders[order.order_id] = order
         
@@ -163,13 +237,32 @@ class VirtualBroker(BaseBroker):
                 self._fill_order(order, fill_price, data.name)
     
     def _fill_order(self, order: Order, fill_price: float, timestamp: datetime):
+
+        print(f"期货配置状态: {self.futures_config is not None}")
+        if self.futures_config:
+            print(f"开始处理期货订单: {order.symbol}")
+
         """订单成交"""
         # 计算成交数量（简化：全部成交）
         fill_qty = order.remaining_quantity
-        trade_value = fill_qty * fill_price
-        
-        # 计算手续费（简化）
-        commission = trade_value * 0.0003  # 0.03%
+
+        # 获取品种配置
+        config = self.futures_config.get_config(order.symbol)
+        trading_unit = config['trading_unit']
+        margin_rate = config['margin_rate']
+
+        # 期货合约价值 = 手数 × 交易单位 × 价格
+        contract_value = fill_qty * trading_unit * fill_price
+
+        # 使用配置计算手续费
+        commission = self.futures_config.calculate_commission(
+            order.symbol, contract_value
+        )
+
+        # 计算保证金（期货特有）
+        margin_required = self.futures_config.calculate_margin(
+            order.symbol, fill_price, fill_qty
+        )
         
         # 更新订单
         order.filled_quantity += fill_qty
@@ -179,7 +272,7 @@ class VirtualBroker(BaseBroker):
         
         # 获取或创建持仓
         if order.symbol not in self.account.positions:
-            self.account.positions[order.symbol] = Position(symbol=order.symbol)
+            self.account.positions[order.symbol] = Position(symbol=order.symbol,)
 
         position = self.account.positions[order.symbol]
         
@@ -189,48 +282,69 @@ class VirtualBroker(BaseBroker):
             if position.quantity < 0:
                 # 当前持有空头仓位
                 close_qty = min(fill_qty, abs(position.quantity))
-                pnl = (position.avg_price - fill_price) * close_qty  # 空头盈亏：开仓价 - 平仓价
-                self.account.realized_pnl += pnl - commission
+                # 空头盈亏：开仓价 - 平仓价 * 平仓仓位 * 交易单位
+                pnl = (position.avg_price - fill_price) * close_qty * trading_unit  
+                # ✅ 平仓：释放之前的卖空保证金
+                # 之前卖空时已经冻结了保证金，现在平仓要释放
+                released_margin = close_qty * trading_unit * position.avg_price * margin_rate
+                self.account.unlock_cash(released_margin)  # ✅ 释放保证金
+
+                self.account.realized_pnl += pnl
+                self.account.available_cash -= commission   # ✅ 扣除手续费
                 position.quantity += close_qty  # 负数加上去，绝对值减小
+
                 # 剩余部分为买入开仓（开多头）
                 if fill_qty > close_qty:
                     open_qty = fill_qty - close_qty
+                    # 开多仓需要保证金
+                    new_margin_required = open_qty * trading_unit * fill_price * margin_rate
                     total_qty = position.quantity + open_qty
                     if position.quantity == 0:
                         position.avg_price = fill_price
                     else:
                         position.avg_price = (position.avg_price * position.quantity + fill_price * open_qty) / total_qty
                     position.quantity = total_qty
+                    self.account.lock_cash(new_margin_required)
             else:
                 # 买入开仓（开多头）或加仓
+                self.account.available_cash -= commission
                 total_qty = position.quantity + fill_qty
                 if position.quantity == 0:
                     position.avg_price = fill_price
                 else:
                     position.avg_price = (position.avg_price * position.quantity + fill_price * fill_qty) / total_qty
                 position.quantity = total_qty
-            # 资金处理
-            used_cash = fill_qty * fill_price
-            self.account.available_cash -= (used_cash + commission)
         else:
             if position.quantity > 0:
                 # 卖出平仓（平多头）
                 close_qty = min(fill_qty, position.quantity)
-                pnl = (fill_price - position.avg_price) * close_qty
-                self.account.realized_pnl += pnl - commission
+                # 期货盈亏计算：考虑交易单位
+                pnl = (fill_price - position.avg_price) * close_qty * trading_unit
+                # ✅ 平仓：释放之前买入的保证金
+                released_margin = close_qty * trading_unit * position.avg_price * margin_rate
+                self.account.unlock_cash(released_margin)  # ✅ 使用 unlock_cash
+
+                self.account.realized_pnl += pnl
+                self.account.available_cash -= commission   # ✅ 扣除手续费
                 position.quantity -= close_qty
                 
                 # 剩余部分为卖出开仓（开空头）
                 if fill_qty > close_qty:
                     open_qty = fill_qty - close_qty
+                    # 开空仓也需要保证金
+                    new_margin_required = open_qty * trading_unit * fill_price * margin_rate
+
                     total_qty = position.quantity - open_qty  # 减，因为是负数
                     if position.quantity == 0:
                         position.avg_price = fill_price
                     else:
                         position.avg_price = (position.avg_price * position.quantity + fill_price * open_qty) / abs(total_qty)
                     position.quantity = total_qty
+                    # ✅ 锁定新开仓的保证金
+                    self.account.lock_cash(new_margin_required)
             else:
-                # 卖出开仓（开空头）或加仓
+                self.account.available_cash -= commission
+
                 total_qty = position.quantity - fill_qty  # 减，空头为负
                 if position.quantity == 0:
                     position.avg_price = fill_price
@@ -238,9 +352,8 @@ class VirtualBroker(BaseBroker):
                     # 空头加仓，计算新的均价
                     position.avg_price = (abs(position.avg_price) * abs(position.quantity) + fill_price * fill_qty) / abs(total_qty)
                 position.quantity = total_qty
-            
-            # 资金处理：卖出获得资金
-            self.account.available_cash += (fill_qty * fill_price - commission)
+                # 支付保证金和手续费
+                self.account.available_cash -= (margin_required + commission)
         
         # 清理零持仓
         if position.quantity == 0:
@@ -258,7 +371,8 @@ class VirtualBroker(BaseBroker):
             quantity=fill_qty,
             price=fill_price,
             commission=commission,
-            timestamp=timestamp
+            timestamp=timestamp,
+            contract_value=contract_value  # 合约价值
         )
         self.trades.append(trade)
         

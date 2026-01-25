@@ -11,8 +11,14 @@ from .event import Event, EventType
 class BacktestEngine:
     """回测引擎"""
     
-    def __init__(self, initial_capital: float = 100000.0):
-        self.broker = VirtualBroker(initial_capital)
+    def __init__(self, initial_capital: float = 100000.0, broker=None):
+        if broker is None:
+            # 创建默认的VirtualBroker
+            from .virtual_broker import VirtualBroker
+            self.broker = VirtualBroker(initial_capital)
+        else:
+            # 使用传入的broker
+            self.broker = broker
         self.strategies: Dict[str, BaseStrategy] = {}
         self.data: Dict[str, pd.DataFrame] = {}
         self.current_time: Optional[datetime] = None

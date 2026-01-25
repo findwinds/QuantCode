@@ -73,3 +73,4 @@ class Trade:
     price: float
     commission: float
     timestamp: datetime
+    contract_value: float
