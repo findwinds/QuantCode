@@ -5,7 +5,7 @@
 from typing import Dict, Any, Optional
 import pandas as pd
 from .strategy import BaseStrategy
-from ..models.order import Order, OrderType, OrderSide
+from models.order import Order, OrderType, OrderSide
 
 class FuturesDualMaStrategy(BaseStrategy):
     """期货双均线趋势跟随策略"""

@@ -177,34 +177,74 @@ class VirtualBroker(BaseBroker):
         order.commission += commission
         order.status = OrderStatus.FILLED if order.remaining_quantity == 0 else OrderStatus.PARTIAL_FILLED
         
+        # 获取或创建持仓
+        if order.symbol not in self.account.positions:
+            self.account.positions[order.symbol] = Position(symbol=order.symbol)
+
+        position = self.account.positions[order.symbol]
+        
         # 更新账户
         if order.side == OrderSide.BUY:
-            # 解锁已使用的资金
+            # 买入逻辑
+            if position.quantity < 0:
+                # 当前持有空头仓位
+                close_qty = min(fill_qty, abs(position.quantity))
+                pnl = (position.avg_price - fill_price) * close_qty  # 空头盈亏：开仓价 - 平仓价
+                self.account.realized_pnl += pnl - commission
+                position.quantity += close_qty  # 负数加上去，绝对值减小
+                # 剩余部分为买入开仓（开多头）
+                if fill_qty > close_qty:
+                    open_qty = fill_qty - close_qty
+                    total_qty = position.quantity + open_qty
+                    if position.quantity == 0:
+                        position.avg_price = fill_price
+                    else:
+                        position.avg_price = (position.avg_price * position.quantity + fill_price * open_qty) / total_qty
+                    position.quantity = total_qty
+            else:
+                # 买入开仓（开多头）或加仓
+                total_qty = position.quantity + fill_qty
+                if position.quantity == 0:
+                    position.avg_price = fill_price
+                else:
+                    position.avg_price = (position.avg_price * position.quantity + fill_price * fill_qty) / total_qty
+                position.quantity = total_qty
+            # 资金处理
             used_cash = fill_qty * fill_price
-            self.account.unlock_cash(used_cash)
             self.account.available_cash -= (used_cash + commission)
+        else:
+            if position.quantity > 0:
+                # 卖出平仓（平多头）
+                close_qty = min(fill_qty, position.quantity)
+                pnl = (fill_price - position.avg_price) * close_qty
+                self.account.realized_pnl += pnl - commission
+                position.quantity -= close_qty
+                
+                # 剩余部分为卖出开仓（开空头）
+                if fill_qty > close_qty:
+                    open_qty = fill_qty - close_qty
+                    total_qty = position.quantity - open_qty  # 减，因为是负数
+                    if position.quantity == 0:
+                        position.avg_price = fill_price
+                    else:
+                        position.avg_price = (position.avg_price * position.quantity + fill_price * open_qty) / abs(total_qty)
+                    position.quantity = total_qty
+            else:
+                # 卖出开仓（开空头）或加仓
+                total_qty = position.quantity - fill_qty  # 减，空头为负
+                if position.quantity == 0:
+                    position.avg_price = fill_price
+                else:
+                    # 空头加仓，计算新的均价
+                    position.avg_price = (abs(position.avg_price) * abs(position.quantity) + fill_price * fill_qty) / abs(total_qty)
+                position.quantity = total_qty
             
-            # 更新持仓
-            if order.symbol not in self.account.positions:
-                self.account.positions[order.symbol] = Position(symbol=order.symbol)
-            
-            position = self.account.positions[order.symbol]
-            total_qty = position.quantity + fill_qty
-            position.avg_price = (position.avg_price * position.quantity + fill_price * fill_qty) / total_qty
-            position.quantity = total_qty
-            
-        else:  # SELL
-            # 更新持仓
-            position = self.account.positions[order.symbol]
-            position.quantity -= fill_qty
-            if position.quantity == 0:
-                position.avg_price = 0.0
-                del self.account.positions[order.symbol]
-            
-            # 计算盈亏
-            pnl = (fill_price - position.avg_price) * fill_qty
-            self.account.realized_pnl += pnl - commission
+            # 资金处理：卖出获得资金
             self.account.available_cash += (fill_qty * fill_price - commission)
+        
+        # 清理零持仓
+        if position.quantity == 0:
+            del self.account.positions[order.symbol]
         
         self.account.commission_total += commission
         self.account.trade_count += 1

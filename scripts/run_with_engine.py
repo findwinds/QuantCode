@@ -179,8 +179,8 @@ def add_strategy_to_engine(engine, args):
             print(f"期货策略: 每次交易 {position_value} 手")
             
             # 使用DualMaStrategy，但调整参数
-            from strategy.dual_ma import DualMaStrategy
-            strategy_cls = DualMaStrategy
+            from strategy.futures_dual_ma import FuturesDualMaStrategy
+            strategy_cls = FuturesDualMaStrategy
             
             # 对于期货，position_ratio应该大于1表示手数
             strategy_params = {
