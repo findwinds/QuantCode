@@ -178,6 +178,56 @@ def test_after_sell_order_total_assets():
     assert abs(account_info.total_assets - expected_total_assets) < 0.01
     assert abs(account_info.unrealized_pnl - unrealized_pnl) < 0.01
 
+def test_after_buy_order_locked_cash():
+    """测试买入订单后保证金占用"""
+    print("=== 测试买入订单后保证金占用 ===")
+    broker = VirtualBroker(initial_capital=100000.0)
+
+    # 1. 更新市场数据
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+    buy_order = Order(
+        symbol="RB0",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=10
+    )
+    order_id = broker.place_order(buy_order)
+    print(f"提交买单: {order_id}, 状态: {buy_order.status}")
+    assert buy_order.status == OrderStatus.SUBMITTED
+
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+
+    account_info = broker.get_account_info()
+    config = broker.futures_config.get_config("RB0")
+    trading_unit = config['trading_unit']  # 10
+    margin_rate = config['margin_rate']  # 0.0001
+    margin_required = 10 * trading_unit * 3500.0 * margin_rate
+   
+    print(f"预期现金占用: {margin_required:.2f}")
+    print(f"实际现金占用: {account_info.locked_cash:.2f}")
+    
+    # 验证
+    assert abs(account_info.locked_cash - margin_required) < 0.01
+
+
 
 def run_all_tests():
     """运行所有测试"""
@@ -188,6 +238,7 @@ def run_all_tests():
         test_basic_order_flow,
         test_after_buy_order_total_assets,
         test_after_sell_order_total_assets,
+        test_after_buy_order_locked_cash,
     ]
 
     results = []
