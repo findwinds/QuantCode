@@ -3,7 +3,6 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
-
 @dataclass
 class Position:
     def __init__(self, symbol: str, trading_unit: int = 1):  # 添加交易单位参数
@@ -89,9 +88,6 @@ class Account:
         # 期货总资产计算
         # total_assets = 可用资金 + 锁定资金 + 未实现盈亏
         total_assets = self.available_cash + self.locked_cash + unrealized_pnl
-        print(f"available_cash: {self.available_cash:.2f}")
-        print(f"locked_cash: {self.locked_cash:.2f}")
-        print(f"unrealized_pnl: {unrealized_pnl:.2f}")
         total_pnl = self.realized_pnl + unrealized_pnl
 
         return AccountInfo(

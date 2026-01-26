@@ -15,19 +15,7 @@ def test_basic_order_flow():
 
     broker = VirtualBroker(initial_capital=100000.0)
 
-    # 1. 测试市价买单
-    buy_order = Order(
-        symbol="RB0",
-        side=OrderSide.BUY,
-        order_type=OrderType.MARKET,
-        quantity=10
-    )
-
-    order_id = broker.place_order(buy_order)
-    print(f"提交买单: {order_id}, 状态: {buy_order.status}")
-    assert buy_order.status == OrderStatus.SUBMITTED
-
-    # 2. 更新市场数据触发成交
+    # 1. 更新市场数据
     timestamp = datetime.now()
     market_data = pd.Series({
         'open': 3500.0,
@@ -36,20 +24,41 @@ def test_basic_order_flow():
         'close': 3500.0,
         'volume': 10000
     }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
 
+    # 2. 测试市价买单
+    buy_order = Order(
+        symbol="RB0",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=10
+    )
+    order_id = broker.place_order(buy_order)
+    print(f"提交买单: {order_id}, 状态: {buy_order.status}")
+    assert buy_order.status == OrderStatus.SUBMITTED
+
+    # 3. 更新市场数据触发成交
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
     broker.update_market_data("RB0", market_data)
     print(f"更新市场数据后订单状态: {buy_order.status}")
     print(f"成交均价: {buy_order.avg_filled_price}")
 
-    # 3. 检查订单状态
+    # 4. 检查订单状态
     if buy_order.status != OrderStatus.FILLED:
         print(f"订单未完全成交: {buy_order.filled_quantity}/{buy_order.quantity}")
 
-    # 4. 检查持仓
+    # 5. 检查持仓
     positions = broker.get_positions()
     print(f"当前持仓: {positions}")
 
-    # 5. 检查账户信息
+    # 6. 检查账户信息
     account_info = broker.get_account_info()
     print(f"账户现金: {account_info.available_cash:.2f}")
     print(f"总资产: {account_info.total_assets:.2f}")
@@ -61,6 +70,18 @@ def test_after_buy_order_total_assets():
     """测试买入订单后总资产"""
     print("=== 测试买入订单后总资产 ===")
     broker = VirtualBroker(initial_capital=100000.0)
+
+    # 1. 更新市场数据
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
     buy_order = Order(
         symbol="RB0",
         side=OrderSide.BUY,
@@ -70,6 +91,7 @@ def test_after_buy_order_total_assets():
     order_id = broker.place_order(buy_order)
     print(f"提交买单: {order_id}, 状态: {buy_order.status}")
     assert buy_order.status == OrderStatus.SUBMITTED
+
     timestamp = datetime.now()
     market_data = pd.Series({
         'open': 3500.0,
@@ -87,6 +109,8 @@ def test_after_buy_order_total_assets():
     min_commission = config['min_commission']    # 1.0
     contract_value = 10 * trading_unit * 3500.0
     commission = max(contract_value * commission_rate, min_commission)  # 35元
+
+    
     # 刚建仓，价格没变，未实现盈亏为0
     unrealized_pnl = 0
     # 总资产 = 初始资金 - 手续费 + 未实现盈亏
@@ -104,6 +128,17 @@ def test_after_sell_order_total_assets():
     """测试卖出订单后总资产"""
     print("=== 测试卖出订单后总资产 ===")
     broker = VirtualBroker(initial_capital=100000.0)
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+    
     sell_order = Order(
         symbol="RB0",
         side=OrderSide.SELL,
