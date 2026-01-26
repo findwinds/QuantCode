@@ -344,7 +344,6 @@ class VirtualBroker(BaseBroker):
                     self.account.lock_cash(new_margin_required)
             else:
                 self.account.available_cash -= commission
-
                 total_qty = position.quantity - fill_qty  # 减，空头为负
                 if position.quantity == 0:
                     position.avg_price = fill_price
@@ -352,8 +351,6 @@ class VirtualBroker(BaseBroker):
                     # 空头加仓，计算新的均价
                     position.avg_price = (abs(position.avg_price) * abs(position.quantity) + fill_price * fill_qty) / abs(total_qty)
                 position.quantity = total_qty
-                # 支付保证金和手续费
-                self.account.available_cash -= (margin_required + commission)
         
         # 清理零持仓
         if position.quantity == 0:
