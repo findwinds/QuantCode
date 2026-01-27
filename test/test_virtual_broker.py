@@ -1,5 +1,6 @@
 # test/test_virtual_broker.py
 from datetime import datetime
+import logging
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -8,6 +9,10 @@ import pandas as pd
 from core.virtual_broker import VirtualBroker
 from models.order import Order, OrderSide, OrderStatus, OrderType
 
+logging.basicConfig(
+    level=logging.DEBUG,  # 设置为DEBUG时打印所有日志
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 def test_basic_order_flow():
     """测试基础订单流程"""
@@ -227,6 +232,63 @@ def test_after_buy_order_locked_cash():
     # 验证
     assert abs(account_info.locked_cash - margin_required) < 0.01
 
+def test_after_realized_pnl():
+    """测试买入订单后卖出订单盈利"""
+    print("=== 测试买入订单后卖出订单盈利 ===")
+    broker = VirtualBroker(initial_capital=100000.0)
+
+    # 1. 更新市场数据
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+    buy_order = Order(
+        symbol="RB0",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=10
+    )
+    order_id = broker.place_order(buy_order)
+    print(f"提交买单: {order_id}, 状态: {buy_order.status}")
+    assert buy_order.status == OrderStatus.SUBMITTED
+
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+    sell_order = Order(
+        symbol="RB0",
+        side=OrderSide.SELL,
+        order_type=OrderType.MARKET,
+        quantity=10
+    )
+    order_id = broker.place_order(sell_order)
+    print(f"提交买单: {order_id}, 状态: {sell_order.status}")
+
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3600.0,
+        'low': 3500.0,
+        'close': 3600.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+    account_info = broker.get_account_info()
+    print(f"实现盈亏: {account_info.realized_pnl:.2f}")
 
 
 def run_all_tests():
@@ -239,6 +301,7 @@ def run_all_tests():
         test_after_buy_order_total_assets,
         test_after_sell_order_total_assets,
         test_after_buy_order_locked_cash,
+        test_after_realized_pnl,
     ]
 
     results = []

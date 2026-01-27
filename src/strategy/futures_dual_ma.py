@@ -2,6 +2,7 @@
 """
 期货专用的双均线策略 - 修正版
 """
+import logging
 from typing import Dict, Any, Optional
 import pandas as pd
 from .strategy import BaseStrategy
@@ -36,6 +37,8 @@ class FuturesDualMaStrategy(BaseStrategy):
         self.current_position = {}  # symbol -> 当前持仓手数（正数=多单，负数=空单）
         self.last_signal = {}
         self.entry_prices = {}      # symbol -> 开仓均价
+
+        self.logger = logging.getLogger(__name__)
     
     def on_bar(self, symbol: str, bar: pd.Series):
         """每个Bar触发一次"""
@@ -115,7 +118,7 @@ class FuturesDualMaStrategy(BaseStrategy):
         
         # 检查保证金
         if not self.check_margin(symbol, position, price):
-            print(f"[{symbol}] 保证金不足，无法开多单")
+            self.logger.debug(f"[{symbol}] 保证金不足，无法开多单")
             return
         
         # 下单
@@ -133,7 +136,7 @@ class FuturesDualMaStrategy(BaseStrategy):
         self.current_position[symbol] = position
         self.entry_prices[symbol] = price
         
-        print(f"[{symbol}] 开多单: {position}手 @ {price:.2f}, 订单ID={order_id}")
+        self.logger.debug(f"[{symbol}] 开多单: {position}手 @ {price:.2f}, 订单ID={order_id}")
     
     def open_short(self, symbol: str, price: float):
         """开空单"""
@@ -141,7 +144,7 @@ class FuturesDualMaStrategy(BaseStrategy):
         
         # 检查保证金
         if not self.check_margin(symbol, position, price):
-            print(f"[{symbol}] 保证金不足，无法开空单")
+            self.logger.debug(f"[{symbol}] 保证金不足，无法开空单")
             return
         
         # 下单
@@ -159,7 +162,7 @@ class FuturesDualMaStrategy(BaseStrategy):
         self.current_position[symbol] = -position
         self.entry_prices[symbol] = price
         
-        print(f"[{symbol}] 开空单: {position}手 @ {price:.2f}, 订单ID={order_id}")
+        self.logger.debug(f"[{symbol}] 开空单: {position}手 @ {price:.2f}, 订单ID={order_id}")
     
     def close_position(self, symbol: str, price: float):
         """平仓"""
@@ -194,8 +197,8 @@ class FuturesDualMaStrategy(BaseStrategy):
         # 更新持仓
         self.current_position[symbol] = 0
         
-        print(f"[{symbol}] {action}: {abs(current_pos)}手 @ {price:.2f}, "
-              f"开仓价={entry_price:.2f}, 盈亏={pnl:.2f}, 订单ID={order_id}")
+        self.logger.debug(f"[{symbol}] {action}: {abs(current_pos)}手 @ {price:.2f}, "
+                         f"开仓价={entry_price:.2f}, 盈亏={pnl:.2f}, 订单ID={order_id}")
     
     def check_margin(self, symbol: str, position: int, price: float) -> bool:
         """检查保证金是否足够"""

@@ -1,4 +1,5 @@
 # virtual_broker.py
+import logging
 import os
 import sys
 from typing import Dict, List, Callable, Optional
@@ -71,21 +72,21 @@ class VirtualBroker(BaseBroker):
         self.rules: List[ExecutionRule] = []
         self.event_handlers: Dict[EventType, List[Callable]] = {}
 
+        self.logger = logging.getLogger(__name__)
+
         if config_path is None:
             config_path = "config/futures_config.yaml"
 
         try:
             from config.futures_config import FuturesConfig
-            print(f"正在加载期货配置: {config_path}")
             self.futures_config = FuturesConfig(config_path)
-            print(f"期货配置加载成功")
         except ImportError as e:
-            print(f"无法导入期货配置模块: {e}")
+            self.logger.error(f"无法导入期货配置模块: {e}")
             self.futures_config = None
         except Exception as e:
-            print(f"加载期货配置文件失败: {e}")
+            self.logger.error(f"加载期货配置文件失败: {e}")
             self.futures_config = None
-        
+
         self.daily_reset()
     
     def add_rule(self, rule: ExecutionRule):
@@ -237,11 +238,6 @@ class VirtualBroker(BaseBroker):
                 self._fill_order(order, fill_price, data.name)
     
     def _fill_order(self, order: Order, fill_price: float, timestamp: datetime):
-
-        print(f"期货配置状态: {self.futures_config is not None}")
-        if self.futures_config:
-            print(f"开始处理期货订单: {order.symbol}")
-
         """订单成交"""
         # 计算成交数量（简化：全部成交）
         fill_qty = order.remaining_quantity
