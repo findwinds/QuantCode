@@ -307,7 +307,10 @@ def print_results(results, args):
                 side = getattr(trade, 'side', 'N/A')
                 if hasattr(side, 'value'):
                     side = side.value
-                print(f"   {i:2d}. {trade.symbol} {side} {getattr(trade, 'quantity', 0):.2f} " +
+                timestamp = getattr(trade, 'timestamp', None)
+                if timestamp:
+                    time_str = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"   {i:2d}. [{time_str}] {trade.symbol} {side} {getattr(trade, 'quantity', 0):.2f} " +
                       f"@ ¥{getattr(trade, 'price', 0):.2f}")
     
     print("=" * 60)

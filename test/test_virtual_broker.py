@@ -275,7 +275,7 @@ def test_after_realized_pnl():
         quantity=10
     )
     order_id = broker.place_order(sell_order)
-    print(f"提交买单: {order_id}, 状态: {sell_order.status}")
+    print(f"提交卖单: {order_id}, 状态: {sell_order.status}")
 
     timestamp = datetime.now()
     market_data = pd.Series({
@@ -289,7 +289,73 @@ def test_after_realized_pnl():
 
     account_info = broker.get_account_info()
     print(f"实现盈亏: {account_info.realized_pnl:.2f}")
+    config = broker.futures_config.get_config("RB0")
+    trading_unit = config['trading_unit']  # 10
+    assert abs(account_info.realized_pnl - (3600-3500)*10*trading_unit) < 0.01
 
+def test_after_realized_pnl_available_cash():
+    """测试买入订单后卖出订单可用现金"""
+    print("=== 测试买入订单后卖出订单可用现金 ===")
+    broker = VirtualBroker(initial_capital=100000.0)
+
+    # 1. 更新市场数据
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+
+    buy_order = Order(
+        symbol="RB0",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=10
+    )
+    order_id = broker.place_order(buy_order)
+    assert buy_order.status == OrderStatus.SUBMITTED
+
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3520.0,
+        'low': 3480.0,
+        'close': 3500.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+    config = broker.futures_config.get_config("RB0")
+    trading_unit = config['trading_unit']  # 10
+    commission_rate = config['commission_rate']  # 10
+    buy_margin = 3500 * 10 * trading_unit * commission_rate
+    account_info = broker.get_account_info()
+
+    sell_order = Order(
+        symbol="RB0",
+        side=OrderSide.SELL,
+        order_type=OrderType.MARKET,
+        quantity=10
+    )
+    order_id = broker.place_order(sell_order)
+
+    timestamp = datetime.now()
+    market_data = pd.Series({
+        'open': 3500.0,
+        'high': 3600.0,
+        'low': 3500.0,
+        'close': 3600.0,
+        'volume': 10000
+    }, name=timestamp)
+    broker.update_market_data("RB0", market_data)
+    sell_margin = 3600 * 10 * trading_unit * commission_rate
+   
+    account_info = broker.get_account_info()
+    print(f"最终可用现金: {account_info.available_cash:.2f}")
+    print(f"预估可用现金: {100000+((3600-3500)*10*trading_unit)-buy_margin-sell_margin:.2f}")
+    assert abs(account_info.available_cash - (100000+((3600-3500)*10*trading_unit)-buy_margin-sell_margin)) < 0.01
 
 def run_all_tests():
     """运行所有测试"""
@@ -302,6 +368,7 @@ def run_all_tests():
         test_after_sell_order_total_assets,
         test_after_buy_order_locked_cash,
         test_after_realized_pnl,
+        test_after_realized_pnl_available_cash,
     ]
 
     results = []

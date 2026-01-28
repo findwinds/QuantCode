@@ -287,6 +287,7 @@ class VirtualBroker(BaseBroker):
 
                 self.account.realized_pnl += pnl
                 self.account.available_cash -= commission   # ✅ 扣除手续费
+                self.account.available_cash += pnl # 盈亏也要加入到可用资金中
                 position.quantity += close_qty  # 负数加上去，绝对值减小
 
                 # 剩余部分为买入开仓（开多头）
@@ -300,7 +301,6 @@ class VirtualBroker(BaseBroker):
                     else:
                         position.avg_price = (position.avg_price * position.quantity + fill_price * open_qty) / total_qty
                     position.quantity = total_qty
-                    self.account.lock_cash(new_margin_required)
             else:
                 # 买入开仓（开多头）或加仓
                 self.account.available_cash -= commission
@@ -318,10 +318,11 @@ class VirtualBroker(BaseBroker):
                 pnl = (fill_price - position.avg_price) * close_qty * trading_unit
                 # ✅ 平仓：释放之前买入的保证金
                 released_margin = close_qty * trading_unit * position.avg_price * margin_rate
-                self.account.unlock_cash(released_margin)  # ✅ 使用 unlock_cash
+                self.account.unlock_cash(released_margin)  # ✅ 释放保证金
 
                 self.account.realized_pnl += pnl
                 self.account.available_cash -= commission   # ✅ 扣除手续费
+                self.account.available_cash += pnl # 盈亏也要加入到可用资金中
                 position.quantity -= close_qty
                 
                 # 剩余部分为卖出开仓（开空头）
