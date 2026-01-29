@@ -56,6 +56,10 @@ class TPlusOneRule(ExecutionRule):
         
         return True
 
+    def reset(self):
+        """每日重置"""
+        self.today_buy_symbols.clear()
+
 
 class VirtualBroker(BaseBroker):
     """虚拟经纪商"""
@@ -122,13 +126,17 @@ class VirtualBroker(BaseBroker):
     def place_order(self, order: Order) -> str:
         """下单（严格资金检查）"""
         current_price = self.current_prices.get(order.symbol, order.price or 0)
-        
+        if current_price <= 0 and order.price is None:
+            order.status = OrderStatus.REJECTED
+            order.reject_reason = "缺少有效价格，无法下单"
+            return order.order_id
+
         # 检查规则
         for rule in self.rules:
             if not rule.check(self, order, current_price):
                 order.status = OrderStatus.REJECTED
                 return order.order_id
-        
+
         # 获取当前持仓
         position = self.account.positions.get(order.symbol)
         current_qty = position.quantity if position else 0
@@ -203,9 +211,11 @@ class VirtualBroker(BaseBroker):
             order = self.orders[order_id]
             if order.is_active:
                 order.status = OrderStatus.CANCELLED
-                # 解锁资金
-                if order.side == OrderSide.BUY:
-                    self.account.unlock_cash(order.remaining_quantity * order.price)
+                # 解锁资金（按未成交比例释放保证金）
+                required_margin = getattr(order, "required_margin", 0.0)
+                if order.quantity > 0 and required_margin > 0:
+                    unlock_margin = required_margin * (order.remaining_quantity / order.quantity)
+                    self.account.unlock_cash(unlock_margin)
                 return True
         return False
     
@@ -243,23 +253,30 @@ class VirtualBroker(BaseBroker):
         fill_qty = order.remaining_quantity
 
         # 获取品种配置
-        config = self.futures_config.get_config(order.symbol)
-        trading_unit = config['trading_unit']
-        margin_rate = config['margin_rate']
+        if self.futures_config:
+            config = self.futures_config.get_config(order.symbol)
+            trading_unit = config['trading_unit']
+            margin_rate = config['margin_rate']
+            commission = self.futures_config.calculate_commission(
+                order.symbol, fill_qty * trading_unit * fill_price
+            )
+        else:
+            trading_unit = 1
+            margin_rate = 1.0
+            commission = 0.0
 
         # 期货合约价值 = 手数 × 交易单位 × 价格
         contract_value = fill_qty * trading_unit * fill_price
 
-        # 使用配置计算手续费
-        commission = self.futures_config.calculate_commission(
-            order.symbol, contract_value
-        )
-
         # 计算保证金（期货特有）
-        margin_required = self.futures_config.calculate_margin(
-            order.symbol, fill_price, fill_qty
-        )
-        
+        if self.futures_config:
+            margin_required = self.futures_config.calculate_margin(
+                order.symbol, fill_price, fill_qty
+            )
+        else:
+            margin_required = fill_qty * fill_price
+
+
         # 更新订单
         order.filled_quantity += fill_qty
         order.avg_filled_price = fill_price
@@ -379,9 +396,10 @@ class VirtualBroker(BaseBroker):
     
     def daily_reset(self):
         """每日重置"""
-        # 这里可以重置T+1规则等
-        pass
-    
+        for rule in self.rules:
+            if hasattr(rule, "reset") and callable(rule.reset):
+                rule.reset()
+
     # 实现其他抽象方法
     def get_order_status(self, order_id: str) -> OrderStatus:
         order = self.orders.get(order_id)

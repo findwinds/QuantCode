@@ -43,7 +43,9 @@ class Order:
     filled_quantity: float = 0.0
     avg_filled_price: float = 0.0
     commission: float = 0.0
-    
+    required_margin: float = 0.0
+    reject_reason: Optional[str] = None
+
     def __post_init__(self):
         if self.order_id is None:
             import uuid

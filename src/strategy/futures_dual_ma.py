@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional
 import pandas as pd
 from .strategy import BaseStrategy
-from models.order import Order, OrderType, OrderSide
+from models.order import Order, OrderType, OrderSide, OrderStatus
 
 class FuturesDualMaStrategy(BaseStrategy):
     """期货双均线趋势跟随策略"""
@@ -101,7 +101,8 @@ class FuturesDualMaStrategy(BaseStrategy):
             if current_pos <= 0:  # 空仓或持有空单
                 # 平空（如果有空单）并开多
                 if current_pos < 0:
-                    self.close_position(symbol, price)
+                    if not self.close_position(symbol, price):
+                        return
                 self.open_long(symbol, price)
         
         elif signal == -1:  # 卖出信号
@@ -109,7 +110,8 @@ class FuturesDualMaStrategy(BaseStrategy):
                 if current_pos >= 0:  # 空仓或持有多单
                     # 平多（如果有多单）并开空
                     if current_pos > 0:
-                        self.close_position(symbol, price)
+                        if not self.close_position(symbol, price):
+                            return
                     self.open_short(symbol, price)
     
     def open_long(self, symbol: str, price: float):
@@ -131,7 +133,10 @@ class FuturesDualMaStrategy(BaseStrategy):
         )
         
         order_id = self.broker.place_order(order)
-        
+        if order.status == OrderStatus.REJECTED:
+            self.logger.debug(f"[{symbol}] 开多单被拒绝: {order.reject_reason}")
+            return
+
         # 更新持仓
         self.current_position[symbol] = position
         self.entry_prices[symbol] = price
@@ -157,20 +162,23 @@ class FuturesDualMaStrategy(BaseStrategy):
         )
         
         order_id = self.broker.place_order(order)
-        
+        if order.status == OrderStatus.REJECTED:
+            self.logger.debug(f"[{symbol}] 开空单被拒绝: {order.reject_reason}")
+            return
+
         # 更新持仓（空单为负数）
         self.current_position[symbol] = -position
         self.entry_prices[symbol] = price
         
         self.logger.debug(f"[{symbol}] 开空单: {position}手 @ {price:.2f}, 订单ID={order_id}")
     
-    def close_position(self, symbol: str, price: float):
+    def close_position(self, symbol: str, price: float) -> bool:
         """平仓"""
         current_pos = self.current_position.get(symbol, 0)
         
         if current_pos == 0:
-            return
-        
+            return True
+
         # 决定平仓方向
         if current_pos > 0:  # 平多单
             side = OrderSide.SELL
@@ -189,7 +197,10 @@ class FuturesDualMaStrategy(BaseStrategy):
         )
         
         order_id = self.broker.place_order(order)
-        
+        if order.status == OrderStatus.REJECTED:
+            self.logger.debug(f"[{symbol}] {action}被拒绝: {order.reject_reason}")
+            return False
+
         # 计算盈亏
         entry_price = self.entry_prices.get(symbol, price)
         pnl = self.calculate_pnl(current_pos, entry_price, price)
@@ -199,7 +210,8 @@ class FuturesDualMaStrategy(BaseStrategy):
         
         self.logger.debug(f"[{symbol}] {action}: {abs(current_pos)}手 @ {price:.2f}, "
                          f"开仓价={entry_price:.2f}, 盈亏={pnl:.2f}, 订单ID={order_id}")
-    
+        return True
+
     def check_margin(self, symbol: str, position: int, price: float) -> bool:
         """检查保证金是否足够"""
         if not self.broker:
