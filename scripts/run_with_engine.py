@@ -182,12 +182,11 @@ def add_strategy_to_engine(engine, args):
             from strategy.futures_dual_ma import FuturesDualMaStrategy
             strategy_cls = FuturesDualMaStrategy
             
-            # 对于期货，position_ratio应该大于1表示手数
+            # 对于期货，position表示手数
             strategy_params = {
                 'fast': args.fast,
                 'slow': args.slow,
-                'position_ratio': float(position_value),  # 作为手数
-                'is_futures': True,  # 添加标记
+                'position': float(position_value),
             }
         else:
             # 股票策略
