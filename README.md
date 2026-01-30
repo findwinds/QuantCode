@@ -45,6 +45,9 @@ python scripts/run_with_engine.py --symbol RB0 --use-akshare --capital 1000000
 
 # 保存回测结果
 python scripts/run_with_engine.py --symbol RB0 --use-akshare --output ./results
+
+# 开始结束时间
+python scripts/run_with_engine.py --symbol RB0 --use-akshare --start 2025-01-01 --end 2025-02-27 --strategy futures_dual_ma 
 ```
 
 ### 运行测试
