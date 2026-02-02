@@ -285,10 +285,12 @@ class VirtualBroker(BaseBroker):
         
         # 获取或创建持仓
         if order.symbol not in self.account.positions:
-            self.account.positions[order.symbol] = Position(symbol=order.symbol,)
+            self.account.positions[order.symbol] = Position(symbol=order.symbol, trading_unit=trading_unit)
 
         position = self.account.positions[order.symbol]
-        
+        if position.trading_unit != trading_unit:
+            position.trading_unit = trading_unit
+
         # 更新账户
         if order.side == OrderSide.BUY:
             # 买入逻辑
@@ -354,8 +356,7 @@ class VirtualBroker(BaseBroker):
                     else:
                         position.avg_price = (position.avg_price * position.quantity + fill_price * open_qty) / abs(total_qty)
                     position.quantity = total_qty
-                    # ✅ 锁定新开仓的保证金
-                    self.account.lock_cash(new_margin_required)
+                    # 这里不重复锁定保证金，place_order 已锁定开仓保证金
             else:
                 self.account.available_cash -= commission
                 total_qty = position.quantity - fill_qty  # 减，空头为负
