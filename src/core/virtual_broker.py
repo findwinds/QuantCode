@@ -158,7 +158,6 @@ class VirtualBroker(BaseBroker):
             else:  # 当前没有多头或有空头
                 close_qty = 0
                 open_qty = order.quantity  # 全部开空仓（加仓）
-        
 
         # 资金检查：开仓部分需要保证金
         if open_qty > 0:
@@ -172,18 +171,32 @@ class VirtualBroker(BaseBroker):
                 
                 # 严格检查：当前可用资金必须足够
                 if margin_required > self.account.available_cash:
-                    order.status = OrderStatus.REJECTED
-                    order.reject_reason = f"开仓保证金不足: 需要{margin_required:.2f}元，可用{self.account.available_cash:.2f}元"
-                    return order.order_id
-                
-                # 锁定保证金
-                if not self.account.lock_cash(margin_required):
-                    order.status = OrderStatus.REJECTED
-                    order.reject_reason = "锁定保证金失败"
-                    return order.order_id
-                
-                order.required_margin = margin_required
-                order.open_quantity = open_qty
+                    if close_qty > 0:
+                        # 保证金不足时优先允许平仓，避免整个反手被拒绝
+                        self.logger.warning(
+                            "开仓保证金不足，订单将仅执行平仓部分: symbol=%s, close_qty=%s, open_qty=%s",
+                            order.symbol,
+                            close_qty,
+                            open_qty,
+                        )
+                        order.quantity = close_qty
+                        order.required_margin = 0
+                        order.open_quantity = 0
+                    else:
+                        order.status = OrderStatus.REJECTED
+                        order.reject_reason = (
+                            f"开仓保证金不足: 需要{margin_required:.2f}元，可用{self.account.available_cash:.2f}元"
+                        )
+                        return order.order_id
+                else:
+                    # 锁定保证金
+                    if not self.account.lock_cash(margin_required):
+                        order.status = OrderStatus.REJECTED
+                        order.reject_reason = "锁定保证金失败"
+                        return order.order_id
+
+                    order.required_margin = margin_required
+                    order.open_quantity = open_qty
 
             except Exception as e:
                 order.status = OrderStatus.REJECTED
