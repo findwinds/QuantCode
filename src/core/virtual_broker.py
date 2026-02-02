@@ -183,7 +183,8 @@ class VirtualBroker(BaseBroker):
                     return order.order_id
                 
                 order.required_margin = margin_required
-                
+                order.open_quantity = open_qty
+
             except Exception as e:
                 order.status = OrderStatus.REJECTED
                 order.reject_reason = f"计算保证金失败: {str(e)}"
@@ -191,7 +192,8 @@ class VirtualBroker(BaseBroker):
         else:
             # 全部是平仓，不需要保证金
             order.required_margin = 0
-        
+            order.open_quantity = 0
+
         # 接受订单...
         order.status = OrderStatus.SUBMITTED
         self.orders[order.order_id] = order
@@ -276,6 +278,28 @@ class VirtualBroker(BaseBroker):
         else:
             margin_required = fill_qty * fill_price
 
+        # 如果有开仓部分，按成交价调整保证金锁定
+        open_qty = getattr(order, "open_quantity", 0.0) or 0.0
+        if open_qty > 0:
+            if self.futures_config:
+                fill_margin_required = self.futures_config.calculate_margin(
+                    order.symbol, fill_price, open_qty
+                )
+            else:
+                fill_margin_required = open_qty * fill_price
+
+            margin_delta = fill_margin_required - getattr(order, "required_margin", 0.0)
+            if margin_delta > 0:
+                if margin_delta > self.account.available_cash:
+                    order.status = OrderStatus.REJECTED
+                    order.reject_reason = "成交价导致保证金不足"
+                    self.account.unlock_cash(getattr(order, "required_margin", 0.0))
+                    return
+                self.account.lock_cash(margin_delta)
+            elif margin_delta < 0:
+                self.account.unlock_cash(-margin_delta)
+
+            order.required_margin = fill_margin_required
 
         # 更新订单
         order.filled_quantity += fill_qty

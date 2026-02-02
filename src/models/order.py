@@ -44,6 +44,7 @@ class Order:
     avg_filled_price: float = 0.0
     commission: float = 0.0
     required_margin: float = 0.0
+    open_quantity: float = 0.0
     reject_reason: Optional[str] = None
 
     def __post_init__(self):

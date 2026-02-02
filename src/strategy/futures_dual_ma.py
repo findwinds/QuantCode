@@ -92,28 +92,67 @@ class FuturesDualMaStrategy(BaseStrategy):
         """执行交易逻辑"""
         if not self.broker:
             return
-        
-        # 获取当前持仓
-        current_pos = self.current_position.get(symbol, 0)
-        
-        # 根据信号决定操作
-        if signal == 1:  # 买入信号
-            if current_pos <= 0:  # 空仓或持有空单
-                # 平空（如果有空单）并开多
-                if current_pos < 0:
-                    if not self.close_position(symbol, price):
-                        return
-                self.open_long(symbol, price)
-        
-        elif signal == -1:  # 卖出信号
-            if self.params['allow_short']:
-                if current_pos >= 0:  # 空仓或持有多单
-                    # 平多（如果有多单）并开空
-                    if current_pos > 0:
-                        if not self.close_position(symbol, price):
-                            return
-                    self.open_short(symbol, price)
-    
+
+        current_pos = self._get_current_position(symbol)
+        target_pos = current_pos
+
+        if signal == 1:
+            target_pos = self.params['position']
+        elif signal == -1:
+            target_pos = -self.params['position'] if self.params['allow_short'] else 0
+
+        position_diff = target_pos - current_pos
+        if position_diff == 0:
+            return
+
+        side = OrderSide.BUY if position_diff > 0 else OrderSide.SELL
+        quantity = abs(position_diff)
+
+        order = Order(
+            symbol=symbol,
+            side=side,
+            order_type=OrderType.MARKET,
+            quantity=quantity,
+            price=price
+        )
+
+        order_id = self.broker.place_order(order)
+        if order.status == OrderStatus.REJECTED:
+            self.logger.debug(f"[{symbol}] 目标仓位调整被拒绝: {order.reject_reason}")
+            return
+
+        self.logger.debug(
+            f"[{symbol}] 目标仓位调整: 当前={current_pos} -> 目标={target_pos}, "
+            f"下单{side.value} {quantity}手 @ {price:.2f}, 订单ID={order_id}"
+        )
+
+    def _get_current_position(self, symbol: str) -> int:
+        if not self.broker:
+            return 0
+        try:
+            positions = self.broker.get_positions()
+            return int(positions.get(symbol, 0))
+        except Exception:
+            return 0
+
+    def on_trade(self, trade):
+        """成交回调：同步本地仓位状态"""
+        if not self.broker:
+            return
+        try:
+            account_info = self.broker.get_account_info()
+            positions = getattr(account_info, 'positions', {})
+            pos = positions.get(trade.symbol) if positions else None
+        except Exception:
+            pos = None
+
+        if pos:
+            self.current_position[trade.symbol] = pos.quantity
+            self.entry_prices[trade.symbol] = pos.avg_price
+        else:
+            self.current_position[trade.symbol] = 0
+            self.entry_prices.pop(trade.symbol, None)
+
     def open_long(self, symbol: str, price: float):
         """开多单"""
         position = self.params['position']
@@ -137,10 +176,6 @@ class FuturesDualMaStrategy(BaseStrategy):
             self.logger.debug(f"[{symbol}] 开多单被拒绝: {order.reject_reason}")
             return
 
-        # 更新持仓
-        self.current_position[symbol] = position
-        self.entry_prices[symbol] = price
-        
         self.logger.debug(f"[{symbol}] 开多单: {position}手 @ {price:.2f}, 订单ID={order_id}")
     
     def open_short(self, symbol: str, price: float):
@@ -166,10 +201,6 @@ class FuturesDualMaStrategy(BaseStrategy):
             self.logger.debug(f"[{symbol}] 开空单被拒绝: {order.reject_reason}")
             return
 
-        # 更新持仓（空单为负数）
-        self.current_position[symbol] = -position
-        self.entry_prices[symbol] = price
-        
         self.logger.debug(f"[{symbol}] 开空单: {position}手 @ {price:.2f}, 订单ID={order_id}")
     
     def close_position(self, symbol: str, price: float) -> bool:
@@ -201,13 +232,9 @@ class FuturesDualMaStrategy(BaseStrategy):
             self.logger.debug(f"[{symbol}] {action}被拒绝: {order.reject_reason}")
             return False
 
-        # 计算盈亏
         entry_price = self.entry_prices.get(symbol, price)
         pnl = self.calculate_pnl(current_pos, entry_price, price)
-        
-        # 更新持仓
-        self.current_position[symbol] = 0
-        
+
         self.logger.debug(f"[{symbol}] {action}: {abs(current_pos)}手 @ {price:.2f}, "
                          f"开仓价={entry_price:.2f}, 盈亏={pnl:.2f}, 订单ID={order_id}")
         return True
@@ -222,11 +249,16 @@ class FuturesDualMaStrategy(BaseStrategy):
             available_cash = getattr(account_info, 'available_cash', 0)
         except:
             available_cash = 0
-        
-        # 计算所需保证金
-        contract_value = price * self.params['contract_multiplier'] * position
-        required_margin = contract_value * self.params['margin_ratio']
-        
+
+        if hasattr(self.broker, 'futures_config') and self.broker.futures_config:
+            try:
+                required_margin = self.broker.futures_config.calculate_margin(symbol, price, position)
+            except Exception:
+                required_margin = 0
+        else:
+            contract_value = price * self.params['contract_multiplier'] * position
+            required_margin = contract_value * self.params['margin_ratio']
+
         return required_margin <= available_cash
     
     def calculate_pnl(self, position: int, entry_price: float, exit_price: float) -> float:
