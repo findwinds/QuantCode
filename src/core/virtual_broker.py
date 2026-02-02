@@ -159,6 +159,8 @@ class VirtualBroker(BaseBroker):
                 close_qty = 0
                 open_qty = order.quantity  # 全部开空仓（加仓）
 
+        order.close_quantity = close_qty
+
         # 资金检查：开仓部分需要保证金
         if open_qty > 0:
             try:
@@ -182,6 +184,7 @@ class VirtualBroker(BaseBroker):
                         order.quantity = close_qty
                         order.required_margin = 0
                         order.open_quantity = 0
+                        order.close_quantity = close_qty
                     else:
                         order.status = OrderStatus.REJECTED
                         order.reject_reason = (
@@ -226,10 +229,16 @@ class VirtualBroker(BaseBroker):
             order = self.orders[order_id]
             if order.is_active:
                 order.status = OrderStatus.CANCELLED
-                # 解锁资金（按未成交比例释放保证金）
+                # 解锁资金（按未成交的开仓比例释放保证金）
                 required_margin = getattr(order, "required_margin", 0.0)
-                if order.quantity > 0 and required_margin > 0:
-                    unlock_margin = required_margin * (order.remaining_quantity / order.quantity)
+                open_quantity = getattr(order, "open_quantity", 0.0)
+                close_quantity = getattr(order, "close_quantity", 0.0)
+                if order.quantity > 0 and required_margin > 0 and open_quantity > 0:
+                    close_filled = min(order.filled_quantity, close_quantity)
+                    close_remaining = max(close_quantity - close_filled, 0.0)
+                    open_remaining = max(order.remaining_quantity - close_remaining, 0.0)
+                    unlock_ratio = open_remaining / open_quantity
+                    unlock_margin = required_margin * unlock_ratio
                     self.account.unlock_cash(unlock_margin)
                 return True
         return False
