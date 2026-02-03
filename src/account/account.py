@@ -5,25 +5,21 @@ from datetime import datetime
 
 @dataclass
 class Position:
-    def __init__(self, symbol: str, trading_unit: int = 1):  # 添加交易单位参数
+    def __init__(self, symbol: str, quantity: float, entry_price: float, trading_unit: int = 1, locked_margin: float = 0.0):
         self.symbol = symbol
-        self.quantity = 0.0
-        self.avg_price = 0.0
-        self.trading_unit = trading_unit  # 新增
-        self.market_value = 0.0 # 持仓的绝对价值（总是正数）
-        self.unrealized_pnl = 0.0   # 未实现盈亏（可正可负）
-        self.realized_pnl = 0.0
-        self.locked_margin = 0.0  # 持仓占用的保证金
+        self.quantity = quantity
+        self.entry_price = entry_price
+        self.trading_unit = trading_unit
+        self.locked_margin = locked_margin
+        self.market_value = 0.0
+        self.unrealized_pnl = 0.0
 
     def update(self, current_price: float):
         """更新持仓信息"""
-        # 持仓市值：持仓的绝对价值
         self.market_value = abs(self.quantity) * self.trading_unit * current_price
-        
-        # 未实现盈亏
         if self.quantity != 0:
             current_value = self.quantity * self.trading_unit * current_price
-            cost = self.quantity * self.trading_unit * self.avg_price
+            cost = self.quantity * self.trading_unit * self.entry_price
             self.unrealized_pnl = current_value - cost
         else:
             self.unrealized_pnl = 0.0
@@ -34,13 +30,11 @@ class AccountInfo:
     """账户信息（只读视图）"""
     total_assets: float = 0.0
     cash: float = 0.0
-    available_cash: float = 0.0
-    locked_cash: float = 0.0
     market_value: float = 0.0
     total_pnl: float = 0.0
     unrealized_pnl: float = 0.0
     realized_pnl: float = 0.0
-    positions: Dict[str, Position] = None
+    positions: Dict[str, List[Position]] = None
     timestamp: datetime = None
     
     def __post_init__(self):
@@ -54,8 +48,6 @@ class AccountInfo:
         return {
             'total_assets': self.total_assets,
             'cash': self.cash,
-            'available_cash': self.available_cash,
-            'locked_cash': self.locked_cash,
             'market_value': self.market_value,
             'total_pnl': self.total_pnl,
             'unrealized_pnl': self.unrealized_pnl,
@@ -69,35 +61,33 @@ class Account:
     def __init__(self, initial_capital: float = 100000.0):
         self.initial_capital = initial_capital
         self.cash = initial_capital
-        self.positions: Dict[str, Position] = {}
+        self.positions: Dict[str, List[Position]] = {}
         self.realized_pnl = 0.0
         self.commission_total = 0.0
         self.trade_count = 0
 
-    def get_info(self, current_prices: Dict[str, float], locked_cash: float) -> AccountInfo:
+    def get_info(self, current_prices: Dict[str, float]) -> AccountInfo:
         """获取账户信息（只读）"""
         market_value = 0.0
         unrealized_pnl = 0.0
 
         # 更新所有持仓
-        for symbol, pos in self.positions.items():
+        for symbol, lots in self.positions.items():
             if symbol in current_prices:
                 price = current_prices[symbol]
-                pos.update(price)
-                market_value += pos.market_value
-                unrealized_pnl += pos.unrealized_pnl
+                for lot in lots:
+                    lot.update(price)
+                    market_value += lot.market_value
+                    unrealized_pnl += lot.unrealized_pnl
 
         # 期货总资产计算
         # total_assets = 现金 + 未实现盈亏
         total_assets = self.cash + unrealized_pnl
         total_pnl = self.realized_pnl + unrealized_pnl
-        available_cash = self.cash - locked_cash
 
         return AccountInfo(
             total_assets=total_assets,
             cash=self.cash,
-            available_cash=available_cash,
-            locked_cash=locked_cash,
             market_value=market_value,  # 持仓总规模（总是正数）
             total_pnl=total_pnl,
             unrealized_pnl=unrealized_pnl,  # 浮动盈亏

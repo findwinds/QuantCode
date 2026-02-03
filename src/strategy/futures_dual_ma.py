@@ -142,13 +142,14 @@ class FuturesDualMaStrategy(BaseStrategy):
         try:
             account_info = self.broker.get_account_info()
             positions = getattr(account_info, 'positions', {})
-            pos = positions.get(trade.symbol) if positions else None
+            lots = positions.get(trade.symbol, []) if positions else []
         except Exception:
-            pos = None
+            lots = []
 
-        if pos:
-            self.current_position[trade.symbol] = pos.quantity
-            self.entry_prices[trade.symbol] = pos.avg_price
+        if lots:
+            net_qty = sum(lot.quantity for lot in lots)
+            self.current_position[trade.symbol] = net_qty
+            self.entry_prices[trade.symbol] = lots[-1].entry_price
         else:
             self.current_position[trade.symbol] = 0
             self.entry_prices.pop(trade.symbol, None)
@@ -243,12 +244,15 @@ class FuturesDualMaStrategy(BaseStrategy):
         """检查保证金是否足够"""
         if not self.broker:
             return False
-        
+
         try:
-            account_info = self.broker.get_account_info()
-            available_cash = getattr(account_info, 'available_cash', 0)
-        except:
-            available_cash = 0
+            cash = self.broker.get_cash()
+            locked_cash = self.broker.get_locked_cash()
+        except Exception:
+            cash = 0
+            locked_cash = 0
+
+        available_cash = cash - locked_cash
 
         if hasattr(self.broker, 'futures_config') and self.broker.futures_config:
             try:

@@ -45,6 +45,11 @@ class BaseBroker(ABC):
         pass
     
     @abstractmethod
-    def get_available_cash(self) -> float:
-        """获取可用资金"""
+    def get_cash(self) -> float:
+        """获取账户现金"""
+        pass
+
+    @abstractmethod
+    def get_locked_cash(self) -> float:
+        """获取锁定保证金"""
         pass
