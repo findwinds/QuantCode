@@ -275,27 +275,31 @@ def print_results(results, args):
         account = results['final_account']
         print(f"\n💼 最终账户:")
         print(f"   总资产:     ¥{getattr(account, 'total_assets', args.capital):>12,.2f}")
-        print(f"   可用资金:   ¥{getattr(account, 'available_cash', args.capital):>12,.2f}")
-        
+        cash = getattr(account, 'cash', args.capital)
+        print(f"   现金:       ¥{cash:>12,.2f}")
+
         # 只打印一次盈亏
         if hasattr(account, 'realized_pnl'):
             print(f"   已实现盈亏: ¥{getattr(account, 'realized_pnl', 0):>12,.2f}")
-        
+
         # 持仓信息
         positions = getattr(account, 'positions', {})
         if positions:
             print(f"\n📦 持仓:")
-            for symbol, pos in positions.items():
-                qty = getattr(pos, 'quantity', 0)
-                if isinstance(pos, dict):
-                    qty = pos.get('quantity', 0)
-                
-                if qty != 0:
-                    value = getattr(pos, 'market_value', 0)
-                    if isinstance(pos, dict):
-                        value = pos.get('market_value', 0)
-                    print(f"   {symbol}: {qty:>8.2f} 股/手, 市值: ¥{value:>10,.2f}")
-    
+            for symbol, lots in positions.items():
+                total_qty = 0.0
+                total_value = 0.0
+                if isinstance(lots, list):
+                    for lot in lots:
+                        total_qty += getattr(lot, 'quantity', 0.0)
+                        total_value += getattr(lot, 'market_value', 0.0)
+                elif isinstance(lots, dict):
+                    total_qty = lots.get('quantity', 0.0)
+                    total_value = lots.get('market_value', 0.0)
+
+                if total_qty != 0:
+                    print(f"   {symbol}: {total_qty:>8.2f} 股/手, 市值: ¥{total_value:>10,.2f}")
+
     # 交易记录 - 只打印一次
     if 'trades' in results:
         trades = results['trades']

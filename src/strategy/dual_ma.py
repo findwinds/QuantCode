@@ -162,7 +162,10 @@ class DualMaStrategy(BaseStrategy):
                         price: float, account_info):
         """下买单"""
         # 计算可用的资金能买多少
-        available_cash = getattr(account_info, 'available_cash', 0)
+        try:
+            available_cash = self.broker.get_cash() - self.broker.get_locked_cash()
+        except Exception:
+            available_cash = 0
         max_can_buy = available_cash / price if price > 0 else 0
         
         # 确保不超过可用资金

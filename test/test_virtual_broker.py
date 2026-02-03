@@ -65,7 +65,7 @@ def test_basic_order_flow():
 
     # 6. 检查账户信息
     account_info = broker.get_account_info()
-    print(f"账户现金: {account_info.available_cash:.2f}")
+    print(f"账户现金: {account_info.cash:.2f}")
     print(f"总资产: {account_info.total_assets:.2f}")
 
     print("基础订单流程测试完成 ✓\n")
@@ -123,8 +123,8 @@ def test_after_buy_order_total_assets():
     print(f"预期总资产: {expected_total_assets:.2f}")
     print(f"实际总资产: {account_info.total_assets:.2f}")
     print(f"未实现盈亏: {account_info.unrealized_pnl:.2f}")
-    print(f"保证金: {account_info.locked_cash:.2f}")
-    
+    print(f"保证金: {broker.get_locked_cash():.2f}")
+
     # 验证
     assert abs(account_info.total_assets - expected_total_assets) < 0.01
     assert abs(account_info.unrealized_pnl - unrealized_pnl) < 0.01
@@ -177,8 +177,8 @@ def test_after_sell_order_total_assets():
     print(f"预期总资产: {expected_total_assets:.2f}")
     print(f"实际总资产: {account_info.total_assets:.2f}")
     print(f"未实现盈亏: {account_info.unrealized_pnl:.2f}")
-    print(f"保证金: {account_info.locked_cash:.2f}")
-    
+    print(f"保证金: {broker.get_locked_cash():.2f}")
+
     # 验证
     assert abs(account_info.total_assets - expected_total_assets) < 0.01
     assert abs(account_info.unrealized_pnl - unrealized_pnl) < 0.01
@@ -227,10 +227,10 @@ def test_after_buy_order_locked_cash():
     margin_required = 10 * trading_unit * 3500.0 * margin_rate
    
     print(f"预期现金占用: {margin_required:.2f}")
-    print(f"实际现金占用: {account_info.locked_cash:.2f}")
-    
+    print(f"实际现金占用: {broker.get_locked_cash():.2f}")
+
     # 验证
-    assert abs(account_info.locked_cash - margin_required) < 0.01
+    assert abs(broker.get_locked_cash() - margin_required) < 0.01
 
 def test_after_realized_pnl():
     """测试买入订单后卖出订单盈利"""
@@ -329,8 +329,11 @@ def test_after_realized_pnl_available_cash():
     broker.update_market_data("RB0", market_data)
     config = broker.futures_config.get_config("RB0")
     trading_unit = config['trading_unit']  # 10
-    commission_rate = config['commission_rate']  # 10
-    buy_margin = 3500 * 10 * trading_unit * commission_rate
+    commission_rate = config['commission_rate']
+    min_commission = config['min_commission']
+
+    buy_trade_value = 3500 * 10 * trading_unit
+    buy_commission = max(buy_trade_value * commission_rate, min_commission)
     account_info = broker.get_account_info()
 
     sell_order = Order(
@@ -350,12 +353,15 @@ def test_after_realized_pnl_available_cash():
         'volume': 10000
     }, name=timestamp)
     broker.update_market_data("RB0", market_data)
-    sell_margin = 3600 * 10 * trading_unit * commission_rate
-   
+    sell_trade_value = 3600 * 10 * trading_unit
+    sell_commission = max(sell_trade_value * commission_rate, min_commission)
+
     account_info = broker.get_account_info()
-    print(f"最终可用现金: {account_info.available_cash:.2f}")
-    print(f"预估可用现金: {100000+((3600-3500)*10*trading_unit)-buy_margin-sell_margin:.2f}")
-    assert abs(account_info.available_cash - (100000+((3600-3500)*10*trading_unit)-buy_margin-sell_margin)) < 0.01
+    pnl = (3600 - 3500) * 10 * trading_unit
+    expected_cash = 100000 + pnl - buy_commission - sell_commission
+    print(f"最终可用现金: {account_info.cash:.2f}")
+    print(f"预估可用现金: {expected_cash:.2f}")
+    assert abs(account_info.cash - expected_cash) < 0.01
 
 def run_all_tests():
     """运行所有测试"""
