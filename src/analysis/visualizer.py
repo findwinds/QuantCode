@@ -24,8 +24,40 @@ class BacktestVisualizer:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']
+        # 设置中文字体 - 改进版本
+        self._setup_font()
+
+    
+    def _setup_font(self):
+        """设置中文字体"""
+        import matplotlib
+        import sys
+        
+        # Windows系统
+        if sys.platform == 'win32':
+            font_names = ['SimHei', 'Microsoft YaHei', 'STHeiti', 'DejaVu Sans']
+        # Mac系统
+        elif sys.platform == 'darwin':
+            font_names = ['Arial Unicode MS', 'SimHei', 'STHeiti', 'DejaVu Sans']
+        # Linux系统
+        else:
+            font_names = ['DejaVu Sans', 'SimHei', 'STHeiti']
+        
+        # 尝试找到可用的字体
+        available_fonts = matplotlib.font_manager.findSystemFonts()
+        available_font_names = [os.path.basename(f) for f in available_fonts]
+        
+        selected_font = None
+        for font in font_names:
+            if any(font.lower() in fname.lower() for fname in available_font_names):
+                selected_font = font
+                break
+        
+        # 如果没有找到中文字体，使用默认
+        if selected_font is None:
+            selected_font = 'DejaVu Sans'
+        
+        plt.rcParams['font.sans-serif'] = [selected_font, 'DejaVu Sans']
         plt.rcParams['axes.unicode_minus'] = False
     
     def plot_equity_curve(self, account_history: List[Dict], title: str = "净值曲线", 
@@ -77,18 +109,18 @@ class BacktestVisualizer:
         
         equity = df['total_assets'].values
         running_max = np.maximum.accumulate(equity)
+        # 回撤是负数，表示从峰值下降的百分比
         drawdown = (equity - running_max) / running_max * 100
         
         fig, ax = plt.subplots(figsize=(14, 6))
         
-        # 绘制回撤柱状图
-        colors = ['#d62728' if dd < 0 else '#2ca02c' for dd in drawdown]
-        ax.bar(df.index, drawdown, color=colors, alpha=0.7, label='回撤')
+        # 绘制回撤柱状图 - 回撤总是负数或零，所以统一用红色
+        ax.bar(df.index, drawdown, color='#d62728', alpha=0.7, label='回撤 (%)')
         
         ax.set_title('最大回撤', fontsize=14, fontweight='bold')
         ax.set_xlabel('日期', fontsize=12)
         ax.set_ylabel('回撤 (%)', fontsize=12)
-        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.8)
+        ax.axhline(y=0, color='black', linestyle='-', linewidth=1.5)
         ax.legend(fontsize=11)
         ax.grid(True, alpha=0.3, axis='y')
         
@@ -103,7 +135,7 @@ class BacktestVisualizer:
         plt.close()
         
         return save_path
-    
+  
     def plot_returns_distribution(self, daily_returns: np.ndarray, save_path: Optional[str] = None) -> str:
         """绘制收益分布直方图"""
         if daily_returns is None or len(daily_returns) == 0:
@@ -181,37 +213,62 @@ class BacktestVisualizer:
     
     def plot_metrics_summary(self, metrics: Dict, save_path: Optional[str] = None) -> str:
         """绘制指标摘要（文本信息）"""
+        import matplotlib.pyplot as plt
+        import matplotlib.font_manager as fm
+        
+        # 设置中文字体
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']  # 用来正常显示中文标签
+        plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.axis('off')
         
         # 格式化指标
-        summary_text = "回测性能指标摘要\n" + "=" * 40 + "\n"
+        summary_lines = [
+            "Backtest Performance Summary",
+            "=" * 50,
+        ]
         
-        metric_labels = {
-            'total_return': ('总收益率', '.2%'),
-            'max_drawdown': ('最大回撤', '.2%'),
-            'sharpe_ratio': ('夏普比率', '.4f'),
-            'win_rate': ('胜率', '.2%'),
-            'return_volatility': ('收益波动率', '.2%'),
-            'profit_factor': ('利润因子', '.2f'),
-            'calmar_ratio': ('Calmar比率', '.4f'),
-            'total_trades': ('总交易数', 'd'),
-            'profitable_trades': ('盈利交易', 'd'),
-            'avg_profit_per_trade': ('平均单笔盈利', ',.2f'),
-        }
+        metric_labels = [
+            ('total_return', 'Total Return', '.2%'),
+            ('max_drawdown', 'Max Drawdown', '.2%'),
+            ('sharpe_ratio', 'Sharpe Ratio', '.4f'),
+            ('calmar_ratio', 'Calmar Ratio', '.4f'),
+            ('win_rate', 'Win Rate', '.2%'),
+            ('return_volatility', 'Volatility', '.2%'),
+            ('profit_factor', 'Profit Factor', '.2f'),
+            ('total_trades', 'Total Trades', 'd'),
+            ('profitable_trades', 'Profitable Trades', 'd'),
+            ('avg_profit_per_trade', 'Avg Profit/Trade', ',.2f'),
+        ]
         
-        for key, (label, fmt) in metric_labels.items():
+        for key, label, fmt in metric_labels:
             if key in metrics:
                 value = metrics[key]
-                if isinstance(value, float):
-                    formatted_value = format(value, fmt) if fmt.startswith('.') else format(value, fmt)
-                else:
+                try:
+                    if isinstance(value, float) and fmt.startswith('.'):
+                        formatted_value = format(value, fmt)
+                    elif isinstance(value, (int, float)):
+                        formatted_value = format(value, fmt)
+                    else:
+                        formatted_value = str(value)
+                except:
                     formatted_value = str(value)
-                summary_text += f"{label:.<20} {formatted_value:>15}\n"
+                
+                # 使用固定宽度格式化
+                line = f"{label}".ljust(20) + f"{formatted_value:>15}"
+                summary_lines.append(line)
         
-        ax.text(0.1, 0.95, summary_text, transform=ax.transAxes, fontsize=11,
-                verticalalignment='top', fontfamily='monospace',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        summary_text = "\n".join(summary_lines)
+
+        # 使用monospace字体确保对齐
+        ax.text(0.05, 0.95, summary_text, 
+                transform=ax.transAxes, 
+                fontsize=11,
+                verticalalignment='top', 
+                fontfamily='monospace',  # 使用等宽字体
+                bbox=dict(boxstyle='round', facecolor='#f0f0f0', alpha=0.8, pad=1),
+                wrap=False)
         
         plt.tight_layout()
         
