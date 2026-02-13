@@ -3,3 +3,5 @@ numpy
 backtrader
 akshare
 pyyaml
+matplotlib
+scipy

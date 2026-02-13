@@ -318,7 +318,7 @@ def print_results(results, args):
     
     print("=" * 60)
 
-def save_results(results, output_dir):
+def save_results(results, output_dir, initial_capital=100000.0):
     """保存结果"""
     if not output_dir:
         return
@@ -353,9 +353,53 @@ def save_results(results, output_dir):
             df.to_csv(csv_file, index=False)
             print(f"💾 账户历史: {csv_file}")
         
+        # 生成图表
+        try:
+            from analysis.performance_analyzer import PerformanceAnalyzer
+            from analysis.visualizer import BacktestVisualizer
+            import numpy as np
+            
+            account_history = results.get('account_history', [])
+            trades = results.get('trades', [])
+            performance = results.get('performance', {})
+            
+            # 计算日收益率
+            if account_history:
+                analyzer = PerformanceAnalyzer(
+                    initial_capital,
+                    account_history,
+                    trades
+                )
+                daily_returns = analyzer.calculate_daily_returns()
+            else:
+                daily_returns = np.array([])
+            
+            # 生成图表
+            visualizer = BacktestVisualizer(output_dir)
+            chart_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            chart_paths = visualizer.generate_all_charts(
+                account_history,
+                daily_returns,
+                performance,
+                timestamp=chart_timestamp
+            )
+            
+            print(f"\n📊 图表已生成:")
+            for chart_name, chart_path in chart_paths.items():
+                if chart_path:
+                    print(f"   {chart_name}: {chart_path}")
+                    
+        except Exception as e:
+            print(f"图表生成失败: {e}")
+            import traceback
+            traceback.print_exc()
+            
     except Exception as e:
         print(f"保存失败: {e}")
-
+        import traceback
+        traceback.print_exc()
+        
 def main():
     """主函数"""
     # 解析参数
@@ -408,14 +452,14 @@ def main():
             
             # 6. 保存结果
             if args.output:
-                save_results(results, args.output)
+                save_results(results, args.output, args.capital)
             else:
                 try:
                     save = input("\n是否保存结果到data/results文件夹？(y/n): ").strip().lower()
                     if save == 'y':
                         results_dir = os.path.join('data', 'results')
                         os.makedirs(results_dir, exist_ok=True)
-                        save_results(results, results_dir)
+                        save_results(results, results_dir, args.capital)
                 except:
                     pass
             

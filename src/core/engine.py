@@ -23,6 +23,7 @@ class BacktestEngine:
         self.data: Dict[str, pd.DataFrame] = {}
         self.current_time: Optional[datetime] = None
         self.results = {}
+        self.account_history = []  # 记录账户历史
         
     def add_data(self, symbol: str, data: pd.DataFrame):
         """添加数据"""
@@ -80,6 +81,14 @@ class BacktestEngine:
             
             # 触发账户更新事件
             account_info = self.broker.get_account_info()
+            self.account_history.append({
+                'timestamp': timestamp,
+                'total_assets': account_info.total_assets,
+                'cash': account_info.cash,
+                'market_value': account_info.market_value,
+                'realized_pnl': account_info.realized_pnl,
+                'unrealized_pnl': account_info.unrealized_pnl,
+            })
             self.broker.emit_event(Event(
                 event_type=EventType.ACCOUNT,
                 timestamp=timestamp,
@@ -95,7 +104,7 @@ class BacktestEngine:
             'final_account': self.broker.get_account_info(),
             'trades': self.broker.trades,
             'orders': list(self.broker.orders.values()),
-            'account_history': []  # 需要记录历史账户信息
+            'account_history': self.account_history,
         }
     
     def get_results(self) -> Dict:
@@ -104,50 +113,12 @@ class BacktestEngine:
     
     def get_performance(self) -> Dict:
         """计算性能指标"""
-        account = self.results['final_account']
-        trades = self.results['trades']
+        from analysis.performance_analyzer import PerformanceAnalyzer
         
-        # 计算收益率
-        total_return = (account.total_assets - self.broker.account.initial_capital) / self.broker.account.initial_capital
+        analyzer = PerformanceAnalyzer(
+            self.broker.account.initial_capital,
+            self.account_history,
+            self.results['trades']
+        )
         
-        # 计算胜率 
-        if trades:
-            winning_trades = 0
-            for t in trades:
-                # 方法1：如果有pnl属性
-                if hasattr(t, 'pnl'):
-                    if t.pnl > 0:
-                        winning_trades += 1
-                # 方法2：如果有profit属性
-                elif hasattr(t, 'profit'):
-                    if t.profit > 0:
-                        winning_trades += 1
-                # 方法3：如果trade对象有盈亏信息
-                elif hasattr(t, 'is_winning'):
-                    if t.is_winning:
-                        winning_trades += 1
-                # 方法4：简化的胜率计算（如果没有盈亏信息，假设50%胜率）
-                else:
-                    # 如果没有盈亏信息，无法计算准确胜率
-                    pass
-            
-            # 如果有可计算的交易，计算胜率
-            if winning_trades > 0:
-                win_rate = winning_trades / len(trades)
-            else:
-                win_rate = 0.0
-        else:
-            win_rate = 0.0
-        
-        return {
-            'initial_capital': self.broker.account.initial_capital,
-            'final_assets': account.total_assets,
-            'total_return': total_return,
-            'total_trades': len(trades),
-            'win_rate': win_rate,
-            'total_commission': self.broker.account.commission_total,
-            'realized_pnl': account.realized_pnl,
-            'unrealized_pnl': account.unrealized_pnl,
-            'sharpe_ratio': 0.0,  # 需要价格序列计算
-            'max_drawdown': 0.0   # 需要账户历史计算
-        }
+        return analyzer.calculate_all_metrics()

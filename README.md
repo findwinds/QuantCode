@@ -32,7 +32,7 @@ pip install -r requirements.txt
 ### 运行回测
 ```bash
 # 使用AkShare数据运行双均线策略
-python scripts/run_with_engine.py --symbol RB0 --use-akshare --strategy futures_dual_ma
+python scripts/run_with_engine.py --symbol MA0 --use-akshare --strategy futures_dual_ma
 
 # 多品种回测
 python scripts/run_with_engine.py --symbol RB0 --symbol MA0 --use-akshare
