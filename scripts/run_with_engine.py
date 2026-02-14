@@ -49,7 +49,7 @@ def parse_arguments():
     parser.add_argument('--use-simulation', action='store_true',
                        help='使用模拟数据')
     parser.add_argument('--strategy', default='dual_ma',
-                       choices=['range_break_strategy', 'futures_dual_ma'],
+                       choices=['range_break_strategy', 'futures_dual_ma','range_break_strategy_v2'],
                        help='策略类型')
     parser.add_argument('--output', '-o', help='输出目录')
     parser.add_argument('--verbose', '-v', action='count', default=0,
@@ -176,7 +176,12 @@ def add_strategy_to_engine(engine, args):
             from strategy.range_break_strategy import RangeBreakStrategy
             strategy_cls = RangeBreakStrategy
             strategy_params = {}
-        
+        elif args.strategy == 'range_break_strategy_v2':
+            # 股票策略
+            from strategy.range_break_strategy_v2 import RangeBreakStrategyV2
+            strategy_cls = RangeBreakStrategyV2
+            strategy_params = {}
+
         # 添加策略到引擎
         engine.add_strategy('main_strategy', strategy_cls, strategy_params)
         
