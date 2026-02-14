@@ -44,18 +44,12 @@ def parse_arguments():
                        help='数据频率')
     parser.add_argument('--capital', type=float, default=100000.0,
                        help='初始资金')
-    parser.add_argument('--fast', type=int, default=10,
-                       help='快线周期')
-    parser.add_argument('--slow', type=int, default=30,
-                       help='慢线周期')
-    parser.add_argument('--position', type=float, default=0.8,
-                       help='仓位比例 (股票) 或 手数 (期货)')
     parser.add_argument('--use-akshare', action='store_true',
                        help='使用AkShare数据')
     parser.add_argument('--use-simulation', action='store_true',
                        help='使用模拟数据')
     parser.add_argument('--strategy', default='dual_ma',
-                       choices=['dual_ma', 'futures_dual_ma'],
+                       choices=['range_break_strategy', 'futures_dual_ma'],
                        help='策略类型')
     parser.add_argument('--output', '-o', help='输出目录')
     parser.add_argument('--verbose', '-v', action='count', default=0,
@@ -172,40 +166,19 @@ def add_strategy_to_engine(engine, args):
     print("-" * 40)
     
     try:
-        # 如果指定期货策略，确保position是整数手数
+        # 如果指定期货策略，使用策略默认参数
         if args.strategy == 'futures_dual_ma':
-            # 将position转换为整数手数
-            position_value = max(1, int(args.position))  # 至少1手，取整数
-            print(f"期货策略: 每次交易 {position_value} 手")
-            
-            # 使用DualMaStrategy，但调整参数
             from strategy.futures_dual_ma import FuturesDualMaStrategy
             strategy_cls = FuturesDualMaStrategy
-            
-            # 对于期货，position表示手数
-            strategy_params = {
-                'fast': args.fast,
-                'slow': args.slow,
-                'position': float(position_value),
-            }
-        else:
+            strategy_params = {}
+        elif args.strategy == 'range_break_strategy':
             # 股票策略
-            from strategy.dual_ma import DualMaStrategy
-            strategy_cls = DualMaStrategy
-            strategy_params = {
-                'fast': args.fast,
-                'slow': args.slow,
-                'position_ratio': args.position,  # 仓位比例
-                'is_futures': False,
-            }
+            from strategy.range_break_strategy import RangeBreakStrategy
+            strategy_cls = RangeBreakStrategy
+            strategy_params = {}
         
         # 添加策略到引擎
         engine.add_strategy('main_strategy', strategy_cls, strategy_params)
-        
-        if args.strategy == 'futures_dual_ma':
-            print(f"参数: 快线={args.fast}, 慢线={args.slow}, 手数={position_value}")
-        else:
-            print(f"参数: 快线={args.fast}, 慢线={args.slow}, 仓位={args.position:.1%}")
         
         return True
         
