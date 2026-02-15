@@ -47,7 +47,7 @@ python scripts/run_with_engine.py --symbol RB0 --use-akshare --output ./results
 python scripts/run_with_engine.py --symbol RB0 --use-akshare --start 2025-01-01 --end 2025-02-27 --strategy futures_dual_ma 
 
 # 自定义
-python scripts/run_with_engine.py --symbol MA0 --use-akshare --freq 60m --strategy range_break_strategy --start 2025-06-09 --end 2026-02-14 --capital 10000
+python scripts/run_with_engine.py --symbol RB2605 --use-akshare --freq 1d --strategy range_break_strategy_v2 --start 2025-06-09 --end 2026-02-13 --capital 10000
 ```
 
 ### 运行测试

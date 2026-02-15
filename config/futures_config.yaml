@@ -1,47 +1,270 @@
 # config/futures_config.yaml
-# 期货配置
+# 期货配置 - 根据交易所标准更新至2025年
 
+# ========== 贵金属 ==========
+# 黄金
+AU:
+  name: "黄金"
+  trading_unit: 1000      # 1000克/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.0001  # 手续费率 0.01%（约10元/手）
+  min_commission: 10.0     # 最低10元
+  price_tick: 0.02        # 最小变动0.02元/克
+
+# 白银
+AG:
+  name: "白银"
+  trading_unit: 15        # 15千克/手
+  margin_rate: 0.09       # 保证金比例 9%
+  commission_rate: 0.00005 # 手续费率 0.005%（约3.5元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 1.0         # 最小变动1元/千克
+
+# ========== 黑色金属 ==========
 # 螺纹钢
 RB:
   name: "螺纹钢"
-  trading_unit: 10      # 10吨/手
-  margin_rate: 0.12     # 保证金比例 12%
-  commission_rate: 0.0001  # 手续费率 0.01%
-  min_commission: 1.0   # 最低1元
-  price_tick: 1.0       # 最小变动1元
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.07       # 保证金比例 7%（原12%偏高）
+  commission_rate: 0.0001  # 手续费率 0.01%（约4元/手）
+  min_commission: 4.0      # 最低4元
+  price_tick: 1.0         # 最小变动1元/吨
 
 # 热卷
 HC:
   name: "热轧卷板"
   trading_unit: 10
-  margin_rate: 0.12
+  margin_rate: 0.07       # 保证金比例 7%
   commission_rate: 0.0001
-  min_commission: 1.0
+  min_commission: 4.0
   price_tick: 1.0
 
 # 铁矿石
 I:
   name: "铁矿石"
-  trading_unit: 100     # 100吨/手
-  margin_rate: 0.15
-  commission_rate: 0.0001
-  min_commission: 2.0
+  trading_unit: 100       # 100吨/手
+  margin_rate: 0.11       # 保证金比例 11%（原15%偏高）
+  commission_rate: 0.0001  # 手续费率 0.01%（约8元/手）
+  min_commission: 8.0      # 最低8元
   price_tick: 0.5
+
+# 焦炭
+J:
+  name: "焦炭"
+  trading_unit: 100       # 100吨/手
+  margin_rate: 0.20       # 保证金比例 20%
+  commission_rate: 0.0001  # 手续费率 0.01%（约20元/手）
+  min_commission: 20.0     # 最低20元
+  price_tick: 0.5
+
+# 焦煤
+JM:
+  name: "焦煤"
+  trading_unit: 60        # 60吨/手
+  margin_rate: 0.20       # 保证金比例 20%
+  commission_rate: 0.0001  # 手续费率 0.01%
+  min_commission: 12.0     # 最低12元
+  price_tick: 0.5
+
+# ========== 有色金属 ==========
+# 铜
+CU:
+  name: "铜"
+  trading_unit: 5         # 5吨/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.00005 # 手续费率 0.005%（约25元/手）
+  min_commission: 25.0     # 最低25元
+  price_tick: 10.0        # 最小变动10元/吨
+
+# 铝
+AL:
+  name: "铝"
+  trading_unit: 5         # 5吨/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.00003 # 手续费率 0.003%（约3元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 5.0         # 最小变动5元/吨
+
+# 锌
+ZN:
+  name: "锌"
+  trading_unit: 5         # 5吨/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.00003 # 手续费率 0.003%（约3元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 5.0
+
+# 镍
+NI:
+  name: "镍"
+  trading_unit: 1         # 1吨/手
+  margin_rate: 0.12       # 保证金比例 12%
+  commission_rate: 0.00005 # 手续费率 0.005%（约3元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 10.0        # 最小变动10元/吨
+
+# ========== 能源化工 ==========
+# 原油
+SC:
+  name: "原油"
+  trading_unit: 1000      # 1000桶/手
+  margin_rate: 0.10       # 保证金比例 10%
+  commission_rate: 0.0001  # 手续费率 0.01%（约20元/手）
+  min_commission: 20.0     # 最低20元
+  price_tick: 0.1         # 最小变动0.1元/桶
 
 # 甲醇
 MA:
   name: "甲醇"
-  trading_unit: 10
-  margin_rate: 0.08
-  commission_rate: 0.00015
-  min_commission: 2.0
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.0001  # 手续费率 0.01%（约2元/手）
+  min_commission: 2.0      # 最低2元
   price_tick: 1.0
 
+# PTA
+TA:
+  name: "PTA"
+  trading_unit: 5         # 5吨/手
+  margin_rate: 0.06       # 保证金比例 6%
+  commission_rate: 0.0001  # 手续费率 0.01%（约3元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 2.0         # 最小变动2元/吨
+
+# 橡胶
+RU:
+  name: "天然橡胶"
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.00005 # 手续费率 0.005%（约3元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 5.0         # 最小变动5元/吨
+
+# 纯碱
+SA:
+  name: "纯碱"
+  trading_unit: 20        # 20吨/手
+  margin_rate: 0.09       # 保证金比例 9%
+  commission_rate: 0.0002  # 手续费率 0.02%（约5元/手）
+  min_commission: 5.0      # 最低5元
+  price_tick: 1.0
+
+# ========== 农产品 ==========
+# 豆粕
+M:
+  name: "豆粕"
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.06       # 保证金比例 6%
+  commission_rate: 0.0001  # 手续费率 0.01%（约1.5元/手）
+  min_commission: 1.5      # 最低1.5元
+  price_tick: 1.0
+
+# 玉米
+C:
+  name: "玉米"
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.06       # 保证金比例 6%
+  commission_rate: 0.0001  # 手续费率 0.01%（约1.2元/手）
+  min_commission: 1.2      # 最低1.2元
+  price_tick: 1.0
+
+# 豆油
+Y:
+  name: "豆油"
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.07       # 保证金比例 7%
+  commission_rate: 0.0001  # 手续费率 0.01%（约2.5元/手）
+  min_commission: 2.5      # 最低2.5元
+  price_tick: 2.0
+
+# 棕榈油
+P:
+  name: "棕榈油"
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.08       # 保证金比例 8%
+  commission_rate: 0.0001  # 手续费率 0.01%（约2.5元/手）
+  min_commission: 2.5      # 最低2.5元
+  price_tick: 2.0
+
+# 白糖
+SR:
+  name: "白糖"
+  trading_unit: 10        # 10吨/手
+  margin_rate: 0.06       # 保证金比例 6%
+  commission_rate: 0.0001  # 手续费率 0.01%（约3元/手）
+  min_commission: 3.0      # 最低3元
+  price_tick: 1.0
+
+# 棉花
+CF:
+  name: "棉花"
+  trading_unit: 5         # 5吨/手
+  margin_rate: 0.07       # 保证金比例 7%
+  commission_rate: 0.0001  # 手续费率 0.01%（约4.3元/手）
+  min_commission: 4.3      # 最低4.3元
+  price_tick: 5.0
+
+# ========== 股指期货 ==========
 # 沪深300股指期货
 IF:
   name: "沪深300股指"
-  trading_unit: 300     # 300倍指数/手
-  margin_rate: 0.12
-  commission_rate: 0.000023  # 0.0023%
+  trading_unit: 300       # 300倍指数/手
+  margin_rate: 0.12       # 保证金比例 12%
+  commission_rate: 0.000023 # 手续费率 0.0023%
+  min_commission: 0.0      # 无最低限制
+  price_tick: 0.2
+
+# 中证500股指期货
+IC:
+  name: "中证500股指"
+  trading_unit: 200       # 200倍指数/手
+  margin_rate: 0.12       # 保证金比例 12%
+  commission_rate: 0.000023 # 手续费率 0.0023%
   min_commission: 0.0
   price_tick: 0.2
+
+# 中证1000股指期货
+IM:
+  name: "中证1000股指"
+  trading_unit: 200       # 200倍指数/手
+  margin_rate: 0.12       # 保证金比例 12%
+  commission_rate: 0.000023 # 手续费率 0.0023%
+  min_commission: 0.0
+  price_tick: 0.2
+
+# 上证50股指期货
+IH:
+  name: "上证50股指"
+  trading_unit: 300       # 300倍指数/手
+  margin_rate: 0.12       # 保证金比例 12%
+  commission_rate: 0.000023 # 手续费率 0.0023%
+  min_commission: 0.0
+  price_tick: 0.2
+
+# ========== 国债期货 ==========
+# 2年期国债
+TS:
+  name: "2年期国债"
+  trading_unit: 2000000   # 200万元面值/手
+  margin_rate: 0.005      # 保证金比例 0.5%
+  commission_rate: 0.00003 # 手续费率 0.003%（约3元/手）
+  min_commission: 3.0
+  price_tick: 0.002
+
+# 5年期国债
+TF:
+  name: "5年期国债"
+  trading_unit: 1000000   # 100万元面值/手
+  margin_rate: 0.012      # 保证金比例 1.2%
+  commission_rate: 0.00003 # 手续费率 0.003%（约3元/手）
+  min_commission: 3.0
+  price_tick: 0.005
+
+# 10年期国债
+T:
+  name: "10年期国债"
+  trading_unit: 1000000   # 100万元面值/手
+  margin_rate: 0.02       # 保证金比例 2%
+  commission_rate: 0.00003 # 手续费率 0.003%（约3元/手）
+  min_commission: 3.0
+  price_tick: 0.005
