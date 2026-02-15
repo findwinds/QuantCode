@@ -306,8 +306,12 @@ def save_results(results, output_dir, initial_capital=100000.0):
         os.makedirs(output_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
+        result_folder = f"results_{timestamp}"
+        result_dir = os.path.join(output_dir, result_folder)
+        os.makedirs(result_dir, exist_ok=True)
+        
         # JSON文件
-        json_file = os.path.join(output_dir, f'engine_backtest_{timestamp}.json')
+        json_file = os.path.join(result_dir, f'engine_backtest_{timestamp}.json')
         
         def default_serializer(obj):
             if hasattr(obj, '__dict__'):
@@ -326,7 +330,7 @@ def save_results(results, output_dir, initial_capital=100000.0):
         
         # CSV文件（账户历史）
         if 'account_history' in results and results['account_history']:
-            csv_file = os.path.join(output_dir, f'account_history_{timestamp}.csv')
+            csv_file = os.path.join(result_dir, f'account_history_{timestamp}.csv')
             df = pd.DataFrame(results['account_history'])
             df.to_csv(csv_file, index=False)
             print(f"💾 账户历史: {csv_file}")
@@ -353,7 +357,7 @@ def save_results(results, output_dir, initial_capital=100000.0):
                 daily_returns = np.array([])
             
             # 生成图表
-            visualizer = BacktestVisualizer(output_dir)
+            visualizer = BacktestVisualizer(result_dir)
             chart_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             chart_paths = visualizer.generate_all_charts(
